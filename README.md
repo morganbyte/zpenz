@@ -1,47 +1,87 @@
-# Proyecto Base Implementando Clean Architecture
+# zpenz
 
-## Antes de Iniciar
+Plataforma de finanzas personales construida por dentro como un **core bancario**.
 
-Empezaremos por explicar los diferentes componentes del proyectos y partiremos de los componentes externos, continuando con los componentes core de negocio (dominio) y por último el inicio y configuración de la aplicación.
+No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el saldo se **calcula a partir de asientos contables de doble partida**, nada se borra (se reversa) y dos operaciones simultáneas no se pisan.
 
-Lee el artículo [Clean Architecture — Aislando los detalles](https://medium.com/bancolombia-tech/clean-architecture-aislando-los-detalles-4f9530f35d7a)
+> **Estado:** Fase 0 — esqueleto en construcción. Todavía no hay funcionalidad de negocio.
 
-# Arquitectura
+## Principios
 
-![Clean Architecture](https://miro.medium.com/max/1400/1*ZdlHz8B0-qu9Y-QO3AXR_w.png)
+1. **Doble partida.** Todo movimiento es un asiento cuyas líneas suman cero: débitos = créditos.
+2. **Inmutabilidad.** Los asientos no se editan ni se borran. Un error se corrige con un asiento de reverso.
+3. **Atomicidad e idempotencia.** Una transferencia se registra completa o no se registra; reintentarla con la misma `Idempotency-Key` no la duplica.
+4. **Concurrencia segura.** Dos operaciones simultáneas sobre la misma cuenta no producen saldos inconsistentes.
+5. **Pocas tecnologías, bien aplicadas.** Cada decisión relevante queda escrita en un [ADR](docs/adr/).
 
-## Domain
+## Stack
 
-Es el módulo más interno de la arquitectura, pertenece a la capa del dominio y encapsula la lógica y reglas del negocio mediante modelos y entidades del dominio.
+| Capa | Tecnología |
+|---|---|
+| Lenguaje | Java 21 (LTS) |
+| Framework | Spring Boot 4 ([ADR-0003](docs/adr/0003-spring-boot-4.md)) |
+| Arquitectura | [Scaffold Clean Architecture de Bancolombia](https://bancolombia.github.io/scaffold-clean-architecture/), Gradle multimódulo, modo imperativo ([ADR-0002](docs/adr/0002-clean-architecture-imperativa.md)) |
+| Base de datos | PostgreSQL + Flyway |
+| Seguridad | Spring Security + JWT (access y refresh) |
+| Mensajería | RabbitMQ (luego AWS SQS) |
+| Pruebas | JUnit 5, Mockito, Testcontainers, JaCoCo, ArchUnit |
+| Documentación de API | OpenAPI / Swagger |
+| Calidad | GitHub Actions + SonarCloud |
+| Contenedores | Docker + Docker Compose |
+| Nube | AWS: RDS + App Runner |
+| Observabilidad | Actuator + Micrometer + Prometheus + Grafana |
+| Frontend | TypeScript |
 
-## Usecases
+## Estructura del proyecto
 
-Este módulo gradle perteneciente a la capa del dominio, implementa los casos de uso del sistema, define lógica de aplicación y reacciona a las invocaciones desde el módulo de entry points, orquestando los flujos hacia el módulo de entities.
+```
+domain/
+  model/              Entidades, reglas de negocio y puertos (interfaces). Sin Spring.
+  usecase/            Casos de uso: orquestan el dominio a través de los puertos.
+infrastructure/
+  driven-adapters/    Implementaciones de los puertos (Postgres, RabbitMQ...).
+  entry-points/       Por donde entra el mundo (API REST).
+  helpers/            Utilidades compartidas por los adaptadores.
+applications/
+  app-service/        Ensambla los módulos y arranca la app (único main).
+deployment/           Dockerfile.
+docs/adr/             Registro de decisiones de arquitectura.
+```
 
-## Infrastructure
+Las dependencias apuntan **hacia adentro**: `domain` no conoce a Spring, a la base de datos ni a HTTP. ArchUnit verifica esa regla en las pruebas.
 
-### Helpers
+## Requisitos
 
-En el apartado de helpers tendremos utilidades generales para los Driven Adapters y Entry Points.
+- JDK 21 (recomendado: Temurin vía [SDKMAN](https://sdkman.io/))
+- Docker
 
-Estas utilidades no están arraigadas a objetos concretos, se realiza el uso de generics para modelar comportamientos
-genéricos de los diferentes objetos de persistencia que puedan existir, este tipo de implementaciones se realizan
-basadas en el patrón de diseño [Unit of Work y Repository](https://medium.com/@krzychukosobudzki/repository-design-pattern-bc490b256006)
+No hace falta instalar Gradle: el proyecto trae el wrapper (`./gradlew`).
 
-Estas clases no puede existir solas y debe heredarse su compartimiento en los **Driven Adapters**
+## Cómo compilar y probar
 
-### Driven Adapters
+```bash
+./gradlew build      # compila, corre pruebas y genera reporte de cobertura
+```
 
-Los driven adapter representan implementaciones externas a nuestro sistema, como lo son conexiones a servicios rest,
-soap, bases de datos, lectura de archivos planos, y en concreto cualquier origen y fuente de datos con la que debamos
-interactuar.
+El reporte de cobertura de JaCoCo queda en `build/reports/`.
 
-### Entry Points
+## Hoja de ruta
 
-Los entry points representan los puntos de entrada de la aplicación o el inicio de los flujos de negocio.
+**Regla de avance:** no se empieza una fase sin que la anterior esté **desplegada**, con **pruebas en verde** y este **README actualizado**. Si una fase se alarga, se corre el cronograma; la regla no se salta.
 
-## Application
+| Fase | Contenido | Hecho cuando | Estado |
+|---|---|---|---|
+| 0 | Esqueleto: scaffold, Docker, CI, despliegue en AWS | `/actuator/health` responde en una URL pública | 🚧 En curso |
+| 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | ⏳ |
+| 2 | Persistencia con Flyway | Migraciones aplicadas en RDS | ⏳ |
+| 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | ⏳ |
+| 4 | API REST + OpenAPI | Swagger accesible | ⏳ |
+| 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | ⏳ |
+| 6 | Eventos con outbox + RabbitMQ | Broker en la nube | ⏳ |
+| 7 | SonarCloud y cobertura | Quality gate en verde | ⏳ |
+| 8 | Observabilidad | Panel de Grafana con métricas reales | ⏳ |
+| 9 | Frontend en TypeScript | Desplegado y conectado a la API | ⏳ |
 
-Este módulo es el más externo de la arquitectura, es el encargado de ensamblar los distintos módulos, resolver las dependencias y crear los beans de los casos de use (UseCases) de forma automática, inyectando en éstos instancias concretas de las dependencias declaradas. Además inicia la aplicación (es el único módulo del proyecto donde encontraremos la función “public static void main(String[] args)”.
+## Decisiones de arquitectura
 
-**Los beans de los casos de uso se disponibilizan automaticamente gracias a un '@ComponentScan' ubicado en esta capa.**
+Ver [docs/adr/](docs/adr/README.md).
