@@ -11,3 +11,6 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - Proyecto generado con el scaffold Clean Architecture de Bancolombia 5.3.0 (imperativo, Java 21, Spring Boot 4).
 - README con principios, stack, estructura y hoja de ruta.
 - ADR-0001 a ADR-0004: uso de ADRs, arquitectura, Spring Boot 4 y representación del dinero.
+- Entry point REST (Spring MVC + Tomcat) con Actuator: `/actuator/health` (con probes de liveness y readiness) y `/actuator/prometheus`.
+- Filtro de cabeceras de seguridad HTTP y configuración de CORS.
+- Prueba de punta a punta que levanta la aplicación y verifica que `/actuator/health` responde `UP`.
