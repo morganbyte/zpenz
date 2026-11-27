@@ -65,6 +65,16 @@ No hace falta instalar Gradle: el proyecto trae el wrapper (`./gradlew`).
 
 El reporte de cobertura de JaCoCo queda en `build/reports/`.
 
+## Cómo correr con Docker
+
+```bash
+docker build -f deployment/Dockerfile -t zpenz .
+docker run --rm -p 8080:8080 zpenz
+curl localhost:8080/actuator/health   # {"status":"UP", ...}
+```
+
+La imagen compila el proyecto por dentro, así que no hace falta correr `./gradlew build` antes. El puerto se puede cambiar con la variable `PORT`.
+
 ## Hoja de ruta
 
 **Regla de avance:** no se empieza una fase sin que la anterior esté **desplegada**, con **pruebas en verde** y este **README actualizado**. Si una fase se alarga, se corre el cronograma; la regla no se salta.

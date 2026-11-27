@@ -41,3 +41,29 @@ jobs:
             **/build/reports/
             **/build/test-results/
           retention-days: 14
+
+  docker:
+    name: Construir imagen y verificar healthcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Construir imagen
+        run: docker build -f deployment/Dockerfile -t zpenz:ci .
+
+      - name: Levantar el contenedor y esperar a /actuator/health
+        run: |
+          docker run -d --name zpenz -e PORT=10000 -p 8080:10000 -m 512m zpenz:ci
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "Healthcheck UP tras ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs zpenz
+          exit 1
+
+      - name: Detener el contenedor
+        if: always()
+        run: docker rm -f zpenz || true
