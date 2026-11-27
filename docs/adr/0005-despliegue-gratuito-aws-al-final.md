@@ -1,6 +1,6 @@
 # ADR-0005: Desplegar en planes gratuitos permanentes y dejar AWS para una demostración final
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-27
 
 ## Contexto
@@ -21,11 +21,13 @@ Una aplicación Spring Boot pequeña cabe en unos 512 MB de RAM si se limita el 
 ## Decisión
 
 - **Fases 0 a 9:** se despliegan solo en servicios con **plan gratuito permanente** que, al llegar a su límite, **suspendan el servicio en vez de cobrar**:
-  - **Aplicación:** Render, *web service* gratuito, construido desde `deployment/Dockerfile` con despliegue automático desde GitHub.
+  - **Aplicación:** Render, *web service* gratuito, construido desde `deployment/Dockerfile` con despliegue automático desde GitHub. La documentación oficial confirma las compilaciones Docker y el despliegue automático para el plan Hobby, pero no dice explícitamente que valgan para las instancias gratuitas. Se comprobará al crear el servicio.
   - **Base de datos:** Neon, plan Free de PostgreSQL. No se usa la base de datos gratuita de Render porque expira a los 30 días.
 - **Fase 10, demostración en AWS:** al final, con la aplicación terminada, se despliega en una cuenta de AWS en **plan Free** usando los créditos. Se documenta y luego se desmonta. El servicio de cómputo se elegirá en su propio ADR, con ECS Express Mode como candidato.
 - Las fases que necesiten otros servicios (mensajería, observabilidad) los eligen con la misma regla y lo dejan escrito en un ADR.
-- **Regla de cuentas:** nunca se registra una tarjeta en una cuenta si el plan gratuito funciona sin ella. Si un proveedor la exige, se confirma antes que su plan gratuito suspende el servicio y no cobra. En AWS se crea una alerta de AWS Budgets desde el primer día.
+- **Regla de cuentas:** nunca se registra una tarjeta en una cuenta si el plan gratuito funciona sin ella. Si un proveedor la exige, se confirma antes, en su documentación oficial, que su plan gratuito suspende el servicio y no cobra. En AWS se crea una alerta de AWS Budgets desde el primer día.
+  - **Render:** nunca se registra un método de pago. Sin tarjeta, al agotar el ancho de banda o los minutos de build, Render suspende los servicios o desactiva los builds hasta el mes siguiente. Con tarjeta, cobra el excedente.
+  - **Neon:** el plan Free no pide tarjeta y no cobra excedentes. Al llegar al límite, suspende el cómputo o rechaza escrituras, sin borrar datos.
 
 ## Alternativas consideradas
 
@@ -37,9 +39,12 @@ Una aplicación Spring Boot pequeña cabe en unos 512 MB de RAM si se limita el 
 ## Consecuencias
 
 - El costo es cero y no hay plazo para terminar el proyecto.
-- **Arranque en frío:** el servicio gratuito de Render se duerme tras unos 15 minutos sin tráfico y tarda alrededor de un minuto en despertar. Neon suspende el cómputo tras 5 minutos de inactividad. La primera petición después de una pausa será lenta. Es aceptable para un proyecto de práctica, pero las pruebas de carga (Fase 3) deben correr en local con Testcontainers.
-- **Memoria limitada a 512 MB:** hay que vigilar el consumo de la JVM a medida que se agreguen dependencias.
-- **Límites de Neon:** 1 GB de almacenamiento y 100 CU-hora al mes por proyecto. Al superarlos, Neon suspende la base de datos en lugar de cobrar.
+- **Arranque en frío:** el servicio gratuito de Render se duerme tras 15 minutos sin tráfico y tarda alrededor de un minuto en despertar. Neon suspende el cómputo tras 5 minutos de inactividad, pero vuelve en unos cientos de milisegundos. La lentitud después de una pausa viene casi toda de Render. Es aceptable para un proyecto de práctica, pero las pruebas de carga (Fase 3) deben correr en local con Testcontainers.
+- **Recursos de Render:** 512 MB de RAM y **0,1 de CPU**. Con tan poca CPU, el arranque de Spring Boot puede tardar más de un minuto. Hay que vigilar el consumo de la JVM y el tiempo de arranque a medida que se agreguen dependencias.
+- **Límites de Render:** 750 horas de instancia, 5 GB de ancho de banda saliente y 500 minutos de build al mes. Render puede reiniciar el servicio en cualquier momento, y el disco se borra en cada reinicio, así que nada se guarda en el sistema de archivos. Bloquea los puertos SMTP 25, 465 y 587.
+- **Tráfico hacia la base de datos:** Render puede suspender un servicio gratuito que genere un volumen de tráfico saliente inusualmente alto, y pone como ejemplo el acceso a una base de datos externa. Neon es externa. Con el tráfico de un proyecto de práctica no se espera, pero si pasa, este ADR debe revisarse.
+- **Límites de Neon:** 1 GB de almacenamiento, 100 CU-hora y 5 GB de tráfico al mes por proyecto.
+- **Sin backups programados en Neon Free:** solo se puede restaurar a un punto de las últimas 6 horas y guardar 1 snapshot manual. Los datos deben poder recrearse con las migraciones de Flyway y datos de prueba.
 - La aplicación debe leer la URL de la base de datos y los secretos desde **variables de entorno**, sin nada atado a un proveedor. Así, cambiar a AWS en la Fase 10 es un despliegue nuevo y no una reescritura.
 - Los planes gratuitos cambian con frecuencia. Si alguno empieza a exigir pago, se escribe un ADR que reemplace a este.
 - La experiencia en AWS se reduce a la Fase 10.
