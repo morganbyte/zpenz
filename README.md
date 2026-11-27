@@ -21,14 +21,14 @@ No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el sald
 | Lenguaje | Java 21 (LTS) |
 | Framework | Spring Boot 4 ([ADR-0003](docs/adr/0003-spring-boot-4.md)) |
 | Arquitectura | [Scaffold Clean Architecture de Bancolombia](https://bancolombia.github.io/scaffold-clean-architecture/), Gradle multimódulo, modo imperativo ([ADR-0002](docs/adr/0002-clean-architecture-imperativa.md)) |
-| Base de datos | PostgreSQL + Flyway |
+| Base de datos | PostgreSQL + Flyway (Neon, plan Free) |
 | Seguridad | Spring Security + JWT (access y refresh) |
-| Mensajería | RabbitMQ (luego AWS SQS) |
+| Mensajería | RabbitMQ (AWS SQS en la demostración final) |
 | Pruebas | JUnit 5, Mockito, Testcontainers, JaCoCo, ArchUnit |
 | Documentación de API | OpenAPI / Swagger |
 | Calidad | GitHub Actions + SonarCloud |
 | Contenedores | Docker + Docker Compose |
-| Nube | AWS: RDS + App Runner |
+| Despliegue | Render (plan gratuito) durante las fases 0 a 9; AWS en plan Free para la demostración final ([ADR-0005](docs/adr/0005-despliegue-gratuito-aws-al-final.md)) |
 | Observabilidad | Actuator + Micrometer + Prometheus + Grafana |
 | Frontend | TypeScript |
 
@@ -71,9 +71,9 @@ El reporte de cobertura de JaCoCo queda en `build/reports/`.
 
 | Fase | Contenido | Hecho cuando | Estado |
 |---|---|---|---|
-| 0 | Esqueleto: scaffold, Docker, CI, despliegue en AWS | `/actuator/health` responde en una URL pública | 🚧 En curso |
+| 0 | Esqueleto: scaffold, Docker, CI, despliegue en Render | `/actuator/health` responde en una URL pública | 🚧 En curso |
 | 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | ⏳ |
-| 2 | Persistencia con Flyway | Migraciones aplicadas en RDS | ⏳ |
+| 2 | Persistencia con Flyway | Migraciones aplicadas en Neon | ⏳ |
 | 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | ⏳ |
 | 4 | API REST + OpenAPI | Swagger accesible | ⏳ |
 | 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | ⏳ |
@@ -81,6 +81,7 @@ El reporte de cobertura de JaCoCo queda en `build/reports/`.
 | 7 | SonarCloud y cobertura | Quality gate en verde | ⏳ |
 | 8 | Observabilidad | Panel de Grafana con métricas reales | ⏳ |
 | 9 | Frontend en TypeScript | Desplegado y conectado a la API | ⏳ |
+| 10 | Demostración en AWS (plan Free, sin costo) | La aplicación completa corre en AWS, se documenta y se desmonta | ⏳ |
 
 ## Decisiones de arquitectura
 
