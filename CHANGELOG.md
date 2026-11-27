@@ -15,3 +15,4 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - Entry point REST (Spring MVC + Tomcat) con Actuator: `/actuator/health` (con probes de liveness y readiness) y `/actuator/prometheus`.
 - Filtro de cabeceras de seguridad HTTP y configuración de CORS.
 - Prueba de punta a punta que levanta la aplicación y verifica que `/actuator/health` responde `UP`.
+- CI en GitHub Actions: compila, corre las pruebas y publica los reportes de pruebas y cobertura en cada push a `main` y en cada pull request.
