@@ -16,4 +16,5 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 - Filtro de cabeceras de seguridad HTTP y configuración de CORS.
 - Prueba de punta a punta que levanta la aplicación y verifica que `/actuator/health` responde `UP`.
 - CI en GitHub Actions: compila, corre las pruebas y publica los reportes de pruebas y cobertura en cada push a `main` y en cada pull request. También construye la imagen Docker y verifica que el contenedor responda `/actuator/health`.
+- Blueprint de Render (`render.yaml`): servicio web gratuito construido desde el `Dockerfile`, con healthcheck en `/actuator/health` y despliegue solo cuando el CI de `main` pasa.
 - `Dockerfile` de dos etapas que compila desde el código fuente, con imagen final solo con el JRE. La app toma el puerto de la variable `PORT`.
