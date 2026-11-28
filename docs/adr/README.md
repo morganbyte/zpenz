@@ -18,3 +18,4 @@ Reglas:
 | [0006](0006-modelo-contable-doble-partida.md) | Modelo contable de doble partida con saldo calculado | Aceptado |
 | [0007](0007-persistencia-jdbcclient-flyway.md) | Persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base | Aceptado |
 | [0008](0008-transferencias-atomicas-idempotentes-concurrentes.md) | Transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal | Aceptado |
+| [0009](0009-api-rest-v1-openapi.md) | API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio | Propuesto |
