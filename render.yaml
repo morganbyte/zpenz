@@ -15,3 +15,12 @@ services:
     # Solo despliega cuando el CI de main pasa.
     autoDeployTrigger: checksPass
     numInstances: 1
+    # Conexión a PostgreSQL en Neon (ADR-0007). Los valores se cargan en el panel de
+    # Render; sync: false evita que el blueprint los sobrescriba.
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false

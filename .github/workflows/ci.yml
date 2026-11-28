@@ -63,18 +63,45 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Desde la Fase 2 la aplicación no arranca sin base de datos (ADR-0007).
+      - name: Levantar PostgreSQL
+        run: |
+          docker network create zpenz
+          docker run -d --name db --network zpenz \
+            -e POSTGRES_DB=zpenz -e POSTGRES_USER=zpenz -e POSTGRES_PASSWORD=zpenz \
+            postgres:17-alpine
+          # Por TCP: durante la inicialización la imagen levanta un servidor temporal
+          # que solo escucha por socket local.
+          for i in $(seq 1 60); do
+            if docker exec db pg_isready -h 127.0.0.1 -U zpenz -d zpenz >/dev/null; then
+              echo "PostgreSQL listo tras ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          docker logs db
+          exit 1
+
       - name: Levantar el contenedor y esperar a /actuator/health
         run: |
-          docker run -d --name zpenz -e PORT=10000 -p 8080:10000 -m 512m zpenz:ci
+          docker run -d --name zpenz --network zpenz -p 8080:10000 -m 512m \
+            -e PORT=10000 \
+            -e DB_URL=jdbc:postgresql://db:5432/zpenz -e DB_USERNAME=zpenz -e DB_PASSWORD=zpenz \
+            -e RENDER_GIT_COMMIT=${{ github.sha }} \
+            zpenz:ci
           for i in $(seq 1 90); do
             if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
-              echo "Healthcheck UP tras ${i}s"; exit 0
+              echo "Healthcheck UP tras ${i}s"
+              curl -sf http://localhost:8080/actuator/info | grep -q '"commit":"${{ github.sha }}"' \
+                || { echo "/actuator/info no reporta el commit"; curl -s http://localhost:8080/actuator/info; exit 1; }
+              exit 0
             fi
             sleep 1
           done
           docker logs zpenz
           exit 1
 
-      - name: Detener el contenedor
+      - name: Detener los contenedores
         if: always()
-        run: docker rm -f zpenz || true
+        run: |
+          docker rm -f zpenz db || true
+          docker network rm zpenz || true

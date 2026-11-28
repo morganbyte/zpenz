@@ -3,6 +3,7 @@ package io.github.morganbyte.zpenz;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 
 import java.io.IOException;
 import java.net.URI;
@@ -14,10 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Arranca la aplicación completa en un puerto aleatorio y verifica el criterio
- * de cierre de la Fase 0: {@code /actuator/health} responde UP.
+ * Arranca la aplicación completa, con PostgreSQL, en un puerto aleatorio y verifica el
+ * criterio de cierre de la Fase 0: {@code /actuator/health} responde UP. Desde la Fase 2
+ * ese estado incluye la base de datos.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "RENDER_GIT_COMMIT=abc1234")
+@Import(PostgresTestConfiguration.class)
 class HealthEndpointTest {
 
     @LocalServerPort
@@ -36,6 +40,14 @@ class HealthEndpointTest {
     @Test
     void readinessProbeIsExposed() throws IOException, InterruptedException {
         assertEquals(200, get("/actuator/health/readiness").statusCode());
+    }
+
+    @Test
+    void infoEndpointReportsTheDeployedCommit() throws IOException, InterruptedException {
+        HttpResponse<String> response = get("/actuator/info");
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"commit\":\"abc1234\""), response.body());
     }
 
     @Test
