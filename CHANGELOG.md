@@ -14,6 +14,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 - Plugin Clean Architecture de Bancolombia actualizado de 5.3.0 a 5.4.0.
 
+### Corregido
+
+- El build de la imagen Docker en el CI fallaba con 429 (Too Many Requests) de Maven Central al cambiar los archivos de Gradle. Gradle ahora reintenta hasta 6 veces con espera creciente desde 2 s.
+
 ## [0.1.0] - 2026-11-27
 
 Cierra la Fase 0: el esqueleto está desplegado y `/actuator/health` responde en https://zpenz.onrender.com.
