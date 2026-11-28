@@ -6,6 +6,25 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Agregado
+
+- ADR-0009: API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio.
+- API v1 bajo `/api/v1`: crear, listar y ver cuentas con su saldo; ver los asientos de una cuenta con paginación por cursor; registrar, ver y reversar asientos; registrar transferencias.
+- Swagger UI público en `/swagger-ui.html` y especificación OpenAPI 3.1 en `/v3/api-docs`, con el esquema `bearer` para probar la API desde *Authorize*.
+- Contrato guardado en `docs/api/openapi.yaml`: `OpenApiContractTest` falla si el código cambia la API sin actualizarlo.
+- `Idempotency-Key` en todos los `POST`. La migración V3 generaliza `idempotency_key`: la clave guarda su operación y puede apuntar a una cuenta o a un asiento.
+- Validación con Bean Validation: un cuerpo inválido responde 400 con todos los campos que fallaron (`validation-failed`).
+- Códigos de error estables en *Problem Details*, también en los errores de Spring MVC (`not-found`, `invalid-request`...).
+
+### Cambiado
+
+- **Incompatible:** las rutas provisionales de la Fase 3 (`/accounts`, `/accounts/{id}/balance`, `/transfers`) se reemplazan por las de `/api/v1`. El saldo viene dentro de la cuenta.
+- **Incompatible:** los montos se envían como texto; un número JSON responde 400.
+- El token de la API se exige solo en `/api/`. Actuator, Swagger UI y la especificación son públicos.
+- La política de seguridad de contenido se relaja solo en las rutas de Swagger UI (estilos en línea e imágenes `data:`).
+- CORS: métodos `GET`, `POST` y `OPTIONS`; cabeceras permitidas y expuestas explícitas. Resuelve el `TODO` de `CorsConfig`.
+- Reversar un reverso responde 409 (`entry-is-reversal`) con una excepción propia del dominio.
+
 ## [0.4.0] - 2026-11-28
 
 Cierra la Fase 3: las transferencias se registran completas o nada, una sola vez por `Idempotency-Key` y sin sobregirar una cuenta de activo aunque lleguen al mismo tiempo. Verificado en producción.

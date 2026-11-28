@@ -2,6 +2,9 @@ dependencies {
     implementation project(':model')
     implementation project(':usecase')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
+    // OpenAPI y Swagger UI generados desde los controladores (ADR-0009).
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.1'
 }

@@ -1,11 +1,12 @@
 package io.github.morganbyte.zpenz.ledgerstore;
 
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
-import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
+import io.github.morganbyte.zpenz.model.ledger.IdempotentOperation;
 import io.github.morganbyte.zpenz.model.ledger.gateways.IdempotencyKeyRepository;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Types;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,20 +25,28 @@ public class PostgresIdempotencyKeyRepository implements IdempotencyKeyRepositor
      * {@code READ COMMITTED}, ya ve su fila. Si se deshace, el {@code INSERT} reclama la clave.
      */
     @Override
-    public Optional<JournalEntryId> claim(IdempotencyKey key, JournalEntryId entryId) {
+    public Optional<Claim> claim(IdempotencyKey key, IdempotentOperation operation, UUID resourceId) {
+        boolean account = operation.producesAccount();
         int claimed = jdbc.sql("""
-                        INSERT INTO idempotency_key (key, journal_entry_id)
-                        VALUES (:key, :entryId)
+                        INSERT INTO idempotency_key (key, operation, account_id, journal_entry_id)
+                        VALUES (:key, :operation, :accountId, :entryId)
                         ON CONFLICT (key) DO NOTHING""")
                 .param("key", key.value())
-                .param("entryId", entryId.value())
+                .param("operation", operation.name())
+                .param("accountId", account ? resourceId : null, Types.OTHER)
+                .param("entryId", account ? null : resourceId, Types.OTHER)
                 .update();
         if (claimed == 1) {
             return Optional.empty();
         }
-        return Optional.of(jdbc.sql("SELECT journal_entry_id FROM idempotency_key WHERE key = :key")
+        return Optional.of(jdbc.sql("""
+                        SELECT operation, coalesce(account_id, journal_entry_id) AS resource_id
+                          FROM idempotency_key
+                         WHERE key = :key""")
                 .param("key", key.value())
-                .query((rs, row) -> new JournalEntryId(rs.getObject("journal_entry_id", UUID.class)))
+                .query((rs, row) -> new Claim(
+                        IdempotentOperation.valueOf(rs.getString("operation")),
+                        rs.getObject("resource_id", UUID.class)))
                 .single());
     }
 }

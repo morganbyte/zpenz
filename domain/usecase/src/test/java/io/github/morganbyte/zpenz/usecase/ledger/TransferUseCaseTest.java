@@ -7,6 +7,7 @@ import io.github.morganbyte.zpenz.model.ledger.AccountType;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKeyReusedException;
 import io.github.morganbyte.zpenz.model.ledger.InsufficientFundsException;
+import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.Transfer;
 import io.github.morganbyte.zpenz.model.money.Money;
 import org.junit.jupiter.api.Test;
@@ -25,8 +26,8 @@ class TransferUseCaseTest {
     private static final LocalDate DATE = LocalDate.of(2026, 11, 28);
 
     private final InMemoryLedger ledger = new InMemoryLedger();
-    private final CreateAccountUseCase createAccount = new CreateAccountUseCase(ledger);
-    private final PostJournalEntryUseCase postEntry = new PostJournalEntryUseCase(ledger, ledger);
+    private final CreateAccountUseCase createAccount = new CreateAccountUseCase(ledger, ledger, ledger);
+    private final PostJournalEntryUseCase postEntry = new PostJournalEntryUseCase(ledger, ledger, ledger, ledger);
     private final GetBalanceUseCase getBalance = new GetBalanceUseCase(ledger, ledger);
     private final TransferUseCase transfers = new TransferUseCase(ledger, ledger, ledger, ledger);
 
@@ -52,10 +53,10 @@ class TransferUseCaseTest {
     void movesMoneyBetweenAccountsInOneTransaction() {
         deposit(savings, "100000");
 
-        TransferUseCase.Result result = transfers.transfer(newKey(), transfer(savings, cash, "70000"));
+        Idempotent<JournalEntry> result = transfers.transfer(newKey(), transfer(savings, cash, "70000"));
 
         assertThat(result.replayed()).isFalse();
-        assertThat(result.entry().lines()).containsExactly(
+        assertThat(result.value().lines()).containsExactly(
                 debit(cash.id(), Money.of("70000")), credit(savings.id(), Money.of("70000")));
         assertThat(getBalance.balanceOf(savings.id())).isEqualTo(Money.of("30000"));
         assertThat(getBalance.balanceOf(cash.id())).isEqualTo(Money.of("70000"));
@@ -110,11 +111,11 @@ class TransferUseCaseTest {
         deposit(savings, "100000");
         IdempotencyKey key = newKey();
 
-        TransferUseCase.Result first = transfers.transfer(key, transfer(savings, cash, "70000"));
-        TransferUseCase.Result second = transfers.transfer(key, transfer(savings, cash, "70000"));
+        Idempotent<JournalEntry> first = transfers.transfer(key, transfer(savings, cash, "70000"));
+        Idempotent<JournalEntry> second = transfers.transfer(key, transfer(savings, cash, "70000"));
 
         assertThat(second.replayed()).isTrue();
-        assertThat(second.entry()).isEqualTo(first.entry());
+        assertThat(second.value()).isEqualTo(first.value());
         assertThat(getBalance.balanceOf(savings.id())).isEqualTo(Money.of("30000"));
     }
 

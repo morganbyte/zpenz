@@ -46,9 +46,6 @@ public record Transfer(AccountId from, AccountId to, Money amount, LocalDate dat
      */
     public boolean matches(JournalEntry entry) {
         Objects.requireNonNull(entry, "El asiento es obligatorio");
-        return !entry.isReversal()
-                && entry.date().equals(date)
-                && entry.description().equals(description)
-                && entry.lines().equals(List.of(EntryLine.debit(to, amount), EntryLine.credit(from, amount)));
+        return toEntry(entry.id()).sameContentAs(entry);
     }
 }

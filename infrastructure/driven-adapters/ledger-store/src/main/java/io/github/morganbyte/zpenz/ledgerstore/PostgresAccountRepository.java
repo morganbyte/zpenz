@@ -42,6 +42,13 @@ public class PostgresAccountRepository implements AccountRepository {
                 .optional();
     }
 
+    @Override
+    public List<Account> findAll() {
+        return jdbc.sql("SELECT id, name, type FROM account ORDER BY created_at, id")
+                .query(PostgresAccountRepository::toAccount)
+                .list();
+    }
+
     private static Account toAccount(ResultSet rs, int row) throws SQLException {
         return new Account(
                 new AccountId(rs.getObject("id", UUID.class)),

@@ -30,13 +30,13 @@ class ApiTokenFilterTest {
 
     @Test
     void letsThroughTheRightToken() throws Exception {
-        assertThat(call("/transfers", "Bearer " + TOKEN).getStatus()).isEqualTo(299);
+        assertThat(call("/api/v1/transfers", "Bearer " + TOKEN).getStatus()).isEqualTo(299);
     }
 
     @Test
     void rejectsAMissingOrWrongToken() throws Exception {
         for (String header : new String[]{null, TOKEN, "Bearer ", "Bearer " + TOKEN + "x", "Basic " + TOKEN}) {
-            MockHttpServletResponse response = call("/accounts", header);
+            MockHttpServletResponse response = call("/api/v1/accounts", header);
             assertThat(response.getStatus()).as(String.valueOf(header)).isEqualTo(401);
             assertThat(response.getHeader("WWW-Authenticate")).isEqualTo("Bearer");
             assertThat(response.getContentType()).startsWith("application/problem+json");
@@ -45,10 +45,13 @@ class ApiTokenFilterTest {
     }
 
     @Test
-    void actuatorStaysPublic() throws Exception {
+    void onlyTheApiRequiresTheToken() throws Exception {
         assertThat(call("/actuator/health", null).getStatus()).isEqualTo(299);
         assertThat(call("/actuator/info", null).getStatus()).isEqualTo(299);
-        assertThat(call("/actuatorx", null).getStatus()).isEqualTo(401);
+        assertThat(call("/swagger-ui.html", null).getStatus()).isEqualTo(299);
+        assertThat(call("/v3/api-docs", null).getStatus()).isEqualTo(299);
+        assertThat(call("/api/v1/cualquier-cosa", null).getStatus()).isEqualTo(401);
+        assertThat(call("/api/", null).getStatus()).isEqualTo(401);
     }
 
     @Test

@@ -26,9 +26,9 @@ class LedgerUseCasesTest {
     private static final LocalDate DATE = LocalDate.of(2026, 11, 28);
 
     private final InMemoryLedger ledger = new InMemoryLedger();
-    private final CreateAccountUseCase createAccount = new CreateAccountUseCase(ledger);
-    private final PostJournalEntryUseCase postEntry = new PostJournalEntryUseCase(ledger, ledger);
-    private final ReverseJournalEntryUseCase reverseEntry = new ReverseJournalEntryUseCase(ledger);
+    private final CreateAccountUseCase createAccount = new CreateAccountUseCase(ledger, ledger, ledger);
+    private final PostJournalEntryUseCase postEntry = new PostJournalEntryUseCase(ledger, ledger, ledger, ledger);
+    private final ReverseJournalEntryUseCase reverseEntry = new ReverseJournalEntryUseCase(ledger, ledger, ledger);
     private final GetBalanceUseCase getBalance = new GetBalanceUseCase(ledger, ledger);
 
     private final Account savings = createAccount.create("Cuenta de ahorros", AccountType.ASSET);

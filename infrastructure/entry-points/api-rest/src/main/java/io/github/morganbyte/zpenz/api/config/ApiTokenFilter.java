@@ -18,8 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * Token compartido para la API hasta que llegue JWT en la Fase 5 (ADR-0008). Todo lo que no
- * es {@code /actuator/} exige {@code Authorization: Bearer <API_TOKEN>}.
+ * Token compartido para la API hasta que llegue JWT en la Fase 5 (ADR-0008). Todo lo que está
+ * bajo {@code /api/} exige {@code Authorization: Bearer <API_TOKEN>}. Actuator, Swagger UI y la
+ * especificación OpenAPI son públicos (ADR-0009).
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
@@ -40,7 +41,7 @@ public class ApiTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return request.getRequestURI().startsWith(request.getContextPath() + "/actuator/");
+        return !request.getRequestURI().startsWith(request.getContextPath() + "/api/");
     }
 
     @Override

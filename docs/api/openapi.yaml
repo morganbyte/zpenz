@@ -1,0 +1,626 @@
+openapi: 3.1.0
+info:
+  description: |-
+    Finanzas personales con un libro contable de doble partida. El saldo no se edita: se calcula desde asientos que nunca se borran.
+
+    - Los montos son texto con hasta dos decimales, en pesos colombianos: `"70000.50"`.
+    - Todo `POST` exige `Idempotency-Key`.
+    - Los errores siguen *Problem Details* (RFC 9457) con un campo `code` estable.
+    - Hasta la Fase 5 la API exige un token compartido (botón *Authorize*).
+  license:
+    name: Código en GitHub
+    url: https://github.com/morganbyte/zpenz
+  title: zpenz API
+  version: v1
+servers:
+- url: /
+security:
+- token: []
+tags:
+- description: "Cuentas del libro. Una cuenta no guarda saldo: se calcula desde los\
+    \ asientos."
+  name: Cuentas
+- description: Mover dinero entre cuentas (ADR-0008).
+  name: Transferencias
+- description: "Asientos de doble partida. No se editan ni se borran: un error se\
+    \ corrige con un reverso."
+  name: Asientos
+paths:
+  /api/v1/accounts:
+    get:
+      description: "Todas las cuentas con su saldo, en el orden en que se crearon."
+      operationId: listAccounts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountList"
+          description: OK
+      summary: Listar las cuentas
+      tags:
+      - Cuentas
+    post:
+      description: Toda cuenta empieza con saldo cero.
+      operationId: createAccount
+      parameters:
+      - description: "Clave que identifica la petición para reintentarla sin duplicarla.\
+          \ Se recomienda un UUID. La misma petición con la misma clave devuelve el\
+          \ mismo recurso con `Idempotent-Replayed: true`; otra petición con la misma\
+          \ clave responde 422."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          pattern: "^[!-~]{1,255}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+          description: "Cuenta creada, o la misma cuenta si la petición se repite\
+            \ con la misma clave."
+          headers:
+            Idempotent-Replayed:
+              description: '`true` si es la repetición de una petición ya registrada.'
+              schema:
+                type: boolean
+              style: simple
+            Location:
+              description: Ruta del recurso creado.
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`validation-failed` o `invalid-request`.'
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`idempotency-key-reused`.'
+      summary: Crear una cuenta
+      tags:
+      - Cuentas
+  /api/v1/accounts/{id}:
+    get:
+      operationId: getAccount
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+          description: La cuenta.
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`account-not-found`.'
+      summary: Ver una cuenta con su saldo
+      tags:
+      - Cuentas
+  /api/v1/accounts/{id}/entries:
+    get:
+      description: "Del más reciente al más antiguo, por fecha y, en la misma fecha,\
+        \ por orden de registro. Para la página siguiente, repita la consulta con\
+        \ `cursor` igual al `nextCursor` recibido."
+      operationId: listAccountEntries
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: El `nextCursor` de la página anterior. Vacío para la primera.
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - description: "Asientos por página, de 1 a 200."
+        in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          maximum: 200
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntryPage"
+          description: Una página de asientos.
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`validation-failed` o `invalid-request` (cursor inválido).'
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`account-not-found`.'
+      summary: Ver los asientos de una cuenta
+      tags:
+      - Cuentas
+  /api/v1/journal-entries:
+    post:
+      description: "Dos o más líneas, con al menos un débito y un crédito, cuyos dé\
+        bitos y créditos sumen lo mismo."
+      operationId: postJournalEntry
+      parameters:
+      - description: "Clave que identifica la petición para reintentarla sin duplicarla.\
+          \ Se recomienda un UUID. La misma petición con la misma clave devuelve el\
+          \ mismo recurso con `Idempotent-Replayed: true`; otra petición con la misma\
+          \ clave responde 422."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          pattern: "^[!-~]{1,255}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostJournalEntryRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntry"
+          description: "Asiento registrado, o el mismo si la petición se repite con\
+            \ la misma clave."
+          headers:
+            Idempotent-Replayed:
+              description: '`true` si es la repetición de una petición ya registrada.'
+              schema:
+                type: boolean
+              style: simple
+            Location:
+              description: Ruta del recurso creado.
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "`validation-failed` o `invalid-request` (por ejemplo, un asiento\
+            \ que no cuadra)."
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`account-not-found`.'
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`idempotency-key-reused`.'
+      summary: Registrar un asiento
+      tags:
+      - Asientos
+  /api/v1/journal-entries/{id}:
+    get:
+      operationId: getJournalEntry
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntry"
+          description: El asiento.
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`entry-not-found`.'
+      summary: Ver un asiento con sus líneas
+      tags:
+      - Asientos
+  /api/v1/journal-entries/{id}/reversal:
+    post:
+      description: Registra un asiento con las mismas líneas y los lados invertidos.
+        El original no cambia. Un asiento se reversa una sola vez y un reverso no
+        se reversa.
+      operationId: reverseJournalEntry
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: "Clave que identifica la petición para reintentarla sin duplicarla.\
+          \ Se recomienda un UUID. La misma petición con la misma clave devuelve el\
+          \ mismo recurso con `Idempotent-Replayed: true`; otra petición con la misma\
+          \ clave responde 422."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          pattern: "^[!-~]{1,255}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReverseJournalEntryRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntry"
+          description: "Reverso registrado, o el mismo si la petición se repite con\
+            \ la misma clave."
+          headers:
+            Idempotent-Replayed:
+              description: '`true` si es la repetición de una petición ya registrada.'
+              schema:
+                type: boolean
+              style: simple
+            Location:
+              description: Ruta del recurso creado.
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "`validation-failed` o `invalid-request` (por ejemplo, fecha\
+            \ anterior al original)."
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`entry-not-found`.'
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`entry-already-reversed` o `entry-is-reversal`.'
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`idempotency-key-reused`.'
+      summary: Reversar un asiento
+      tags:
+      - Asientos
+  /api/v1/transfers:
+    post:
+      description: "Un asiento de dos líneas: crédito al origen y débito al destino.\
+        \ No puede dejar en negativo una cuenta de activo, aunque lleguen varias al\
+        \ mismo tiempo. El asiento se consulta en `/api/v1/journal-entries/{id}`."
+      operationId: createTransfer
+      parameters:
+      - description: "Clave que identifica la petición para reintentarla sin duplicarla.\
+          \ Se recomienda un UUID. La misma petición con la misma clave devuelve el\
+          \ mismo recurso con `Idempotent-Replayed: true`; otra petición con la misma\
+          \ clave responde 422."
+        in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          pattern: "^[!-~]{1,255}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+          description: "Transferencia registrada, o la misma si la petición se repite\
+            \ con la misma clave."
+          headers:
+            Idempotent-Replayed:
+              description: '`true` si es la repetición de una petición ya registrada.'
+              schema:
+                type: boolean
+              style: simple
+            Location:
+              description: Ruta del recurso creado.
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "`validation-failed` o `invalid-request` (por ejemplo, origen\
+            \ igual al destino)."
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`account-not-found`.'
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: '`insufficient-funds` o `idempotency-key-reused`.'
+      summary: Registrar una transferencia
+      tags:
+      - Transferencias
+components:
+  schemas:
+    Account:
+      type: object
+      description: Una cuenta con su saldo calculado en el momento de la consulta.
+      properties:
+        balance:
+          type: string
+          description: Saldo en su lado normal. Puede ser negativo.
+          example: "30000.00"
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - ASSET
+          - EXPENSE
+          - LIABILITY
+          - EQUITY
+          - INCOME
+    AccountList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+    CreateAccountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Cuenta de ahorros
+          maxLength: 100
+          minLength: 0
+        type:
+          type: string
+          enum:
+          - ASSET
+          - EXPENSE
+          - LIABILITY
+          - EQUITY
+          - INCOME
+      required:
+      - name
+      - type
+    EntryLine:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          example: "70000.00"
+        side:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+    EntryLineRequest:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          example: "70000.00"
+          pattern: "^\\d{1,17}(\\.\\d{1,2})?$"
+        side:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      required:
+      - accountId
+      - amount
+      - side
+    JournalEntry:
+      type: object
+      description: Un asiento de doble partida. Es inmutable.
+      properties:
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntryLine"
+        reversalOf:
+          type:
+          - string
+          - "null"
+          format: uuid
+          description: "El asiento que este reversa, si es un reverso."
+    JournalEntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalEntry"
+        nextCursor:
+          type:
+          - string
+          - "null"
+          description: "Cursor de la página siguiente, o null si no hay más."
+    PostJournalEntryRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 255
+          minLength: 0
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntryLineRequest"
+          maxItems: 100
+          minItems: 2
+      required:
+      - date
+      - description
+      - lines
+    ProblemDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
+          additionalProperties: {}
+        status:
+          type: integer
+          format: int32
+        title:
+          type: string
+        type:
+          type: string
+          format: uri
+    ReverseJournalEntryRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+          example: "Reverso: mercado duplicado"
+          maxLength: 255
+          minLength: 0
+      required:
+      - date
+      - description
+    Transfer:
+      type: object
+      properties:
+        amount:
+          type: string
+          example: "70000.00"
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        from:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        to:
+          type: string
+          format: uuid
+    TransferRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          example: "70000.00"
+          pattern: "^\\d{1,17}(\\.\\d{1,2})?$"
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+          example: Retiro
+          maxLength: 255
+          minLength: 0
+        from:
+          type: string
+          format: uuid
+          description: "Cuenta de origen: recibe el crédito."
+        to:
+          type: string
+          format: uuid
+          description: "Cuenta de destino: recibe el débito."
+      required:
+      - amount
+      - date
+      - description
+      - from
+      - to
+  securitySchemes:
+    token:
+      description: El valor de `API_TOKEN` (ADR-0008). Se reemplaza por JWT en la
+        Fase 5.
+      scheme: bearer
+      type: http
