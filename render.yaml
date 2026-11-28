@@ -24,3 +24,6 @@ services:
         sync: false
       - key: DB_PASSWORD
         sync: false
+      # Token compartido de la API hasta la Fase 5 (ADR-0008). Sin él la aplicación no arranca.
+      - key: API_TOKEN
+        sync: false

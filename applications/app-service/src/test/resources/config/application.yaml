@@ -1,0 +1,4 @@
+# Solo para pruebas y ./gradlew :app-service:bootTestRun. En Render, API_TOKEN se define en el
+# panel (ADR-0008). classpath:/config/ se suma al application.yaml principal, no lo reemplaza.
+zpenz:
+  api-token: token-local-de-pruebas-0123456789abcdef

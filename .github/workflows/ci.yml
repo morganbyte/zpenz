@@ -86,6 +86,7 @@ jobs:
           docker run -d --name zpenz --network zpenz -p 8080:10000 -m 512m \
             -e PORT=10000 \
             -e DB_URL=jdbc:postgresql://db:5432/zpenz -e DB_USERNAME=zpenz -e DB_PASSWORD=zpenz \
+            -e API_TOKEN=token-de-ci-0123456789abcdef0123456789 \
             -e RENDER_GIT_COMMIT=${{ github.sha }} \
             zpenz:ci
           for i in $(seq 1 90); do
@@ -93,6 +94,9 @@ jobs:
               echo "Healthcheck UP tras ${i}s"
               curl -sf http://localhost:8080/actuator/info | grep -q '"commit":"${{ github.sha }}"' \
                 || { echo "/actuator/info no reporta el commit"; curl -s http://localhost:8080/actuator/info; exit 1; }
+              # La API exige el token (ADR-0008): sin él responde 401.
+              status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/accounts)
+              [ "$status" = "401" ] || { echo "/accounts sin token respondió $status, se esperaba 401"; exit 1; }
               exit 0
             fi
             sleep 1

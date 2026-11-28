@@ -7,6 +7,8 @@ import io.github.morganbyte.zpenz.model.ledger.gateways.AccountRepository;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -36,10 +38,27 @@ public class PostgresAccountRepository implements AccountRepository {
     public Optional<Account> findById(AccountId id) {
         return jdbc.sql("SELECT id, name, type FROM account WHERE id = :id")
                 .param("id", id.value())
-                .query((rs, row) -> new Account(
-                        new AccountId(rs.getObject("id", UUID.class)),
-                        rs.getString("name"),
-                        AccountType.valueOf(rs.getString("type"))))
+                .query(PostgresAccountRepository::toAccount)
+                .optional();
+    }
+
+    private static Account toAccount(ResultSet rs, int row) throws SQLException {
+        return new Account(
+                new AccountId(rs.getObject("id", UUID.class)),
+                rs.getString("name"),
+                AccountType.valueOf(rs.getString("type")));
+    }
+
+    /**
+     * {@code FOR NO KEY UPDATE} y no {@code FOR UPDATE}: insertar una línea que referencia la
+     * cuenta toma {@code FOR KEY SHARE} por la clave foránea, que choca con {@code FOR UPDATE}
+     * pero no con este bloqueo (ADR-0008).
+     */
+    @Override
+    public Optional<Account> lockById(AccountId id) {
+        return jdbc.sql("SELECT id, name, type FROM account WHERE id = :id FOR NO KEY UPDATE")
+                .param("id", id.value())
+                .query(PostgresAccountRepository::toAccount)
                 .optional();
     }
 

@@ -6,6 +6,23 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Agregado
+
+- ADR-0008 (aceptado): transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal.
+- Transferencias (`TransferUseCase`): un asiento de dos líneas que se registra completo o nada. Una transferencia no puede dejar en negativo una cuenta de activo, aunque lleguen varias al mismo tiempo: la cuenta de origen se bloquea con `FOR NO KEY UPDATE` mientras se revisa su saldo.
+- Idempotencia: migración V2 con la tabla `idempotency_key`. Repetir una transferencia con la misma clave devuelve la original sin registrar nada; usar la clave para otra transferencia se rechaza.
+- Puerto `Transactions` para que los casos de uso abran una transacción sin conocer Spring.
+- Rutas provisionales `POST /accounts`, `GET /accounts/{id}/balance` y `POST /transfers`, con errores en formato *Problem Details* (RFC 9457).
+- Pruebas de concurrencia contra PostgreSQL: diez transferencias simultáneas desde una cuenta que alcanza para tres, y ocho reintentos simultáneos con la misma clave.
+
+### Seguridad
+
+- La API exige `Authorization: Bearer` con el token de `API_TOKEN` hasta la Fase 5. `/actuator/health` e `/actuator/info` siguen públicos.
+
+### Cambiado
+
+- La aplicación necesita `API_TOKEN` para arrancar. El CI comprueba que la API responda 401 sin token.
+
 ## [0.3.0] - 2026-11-28
 
 Cierra la Fase 2: el libro contable se persiste en PostgreSQL con Flyway, y la migración V1 está aplicada en Neon.

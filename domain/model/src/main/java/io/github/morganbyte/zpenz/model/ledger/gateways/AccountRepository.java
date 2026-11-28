@@ -15,6 +15,13 @@ public interface AccountRepository {
 
     Optional<Account> findById(AccountId id);
 
+    /**
+     * Lee la cuenta y la bloquea hasta el final de la transacción: otra transacción que pida
+     * el mismo bloqueo espera (ADR-0008). Solo tiene sentido dentro de
+     * {@link Transactions#inTransaction}.
+     */
+    Optional<Account> lockById(AccountId id);
+
     /** De los identificadores dados, los que no corresponden a ninguna cuenta. */
     Set<AccountId> findMissing(Collection<AccountId> ids);
 }
