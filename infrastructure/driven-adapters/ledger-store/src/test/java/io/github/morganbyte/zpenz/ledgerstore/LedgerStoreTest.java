@@ -4,7 +4,10 @@ import io.github.morganbyte.zpenz.model.ledger.Account;
 import io.github.morganbyte.zpenz.model.ledger.AccountId;
 import io.github.morganbyte.zpenz.model.ledger.AccountType;
 import io.github.morganbyte.zpenz.model.ledger.EntryAlreadyReversedException;
+import io.github.morganbyte.zpenz.model.ledger.EntryPage;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
+import io.github.morganbyte.zpenz.model.ledger.IdempotentOperation;
+import io.github.morganbyte.zpenz.model.ledger.gateways.IdempotencyKeyRepository.Claim;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
 import io.github.morganbyte.zpenz.model.ledger.SideTotals;
@@ -439,23 +442,23 @@ class LedgerStoreTest {
             IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
             JournalEntry entry = unsavedEntry(cash, savings, "500");
 
-            Optional<JournalEntryId> first = transactions.inTransaction(() -> {
-                Optional<JournalEntryId> claim = keys.claim(key, entry.id());
+            Optional<Claim> first = transactions.inTransaction(() -> {
+                Optional<Claim> claim = keys.claim(key, IdempotentOperation.TRANSFER, entry.id().value());
                 entries.add(entry);
                 return claim;
             });
-            Optional<JournalEntryId> second = transactions.inTransaction(
-                    () -> keys.claim(key, JournalEntryId.random()));
+            Optional<Claim> second = transactions.inTransaction(
+                    () -> keys.claim(key, IdempotentOperation.TRANSFER, UUID.randomUUID()));
 
             assertThat(first).isEmpty();
-            assertThat(second).contains(entry.id());
+            assertThat(second).contains(new Claim(IdempotentOperation.TRANSFER, entry.id().value()));
         }
 
         @Test
         void aKeyClaimedWithoutItsEntryCannotBeCommitted() {
             IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
-            assertThatThrownBy(() -> transactions.inTransaction(() -> keys.claim(key, JournalEntryId.random())))
+            assertThatThrownBy(() -> transactions.inTransaction(() -> keys.claim(key, IdempotentOperation.TRANSFER, UUID.randomUUID())))
                     .hasStackTraceContaining("idempotency_key_journal_entry_id_fkey");
             assertThat(jdbc.sql("SELECT count(*) FROM idempotency_key WHERE key = :key")
                     .param("key", key.value()).query(Long.class).single()).isZero();
@@ -466,7 +469,7 @@ class LedgerStoreTest {
             IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
 
             assertThatThrownBy(() -> transactions.inTransaction(() -> {
-                keys.claim(key, JournalEntryId.random());
+                keys.claim(key, IdempotentOperation.TRANSFER, UUID.randomUUID());
                 throw new IllegalStateException("sin fondos");
             })).hasMessage("sin fondos");
 
@@ -474,7 +477,7 @@ class LedgerStoreTest {
             Account cash = newAccount("Efectivo", AccountType.ASSET);
             JournalEntry entry = unsavedEntry(cash, savings, "1");
             assertThat(transactions.inTransaction(() -> {
-                Optional<JournalEntryId> claim = keys.claim(key, entry.id());
+                Optional<Claim> claim = keys.claim(key, IdempotentOperation.TRANSFER, entry.id().value());
                 entries.add(entry);
                 return claim;
             })).isEmpty();
@@ -490,21 +493,21 @@ class LedgerStoreTest {
             CountDownLatch release = new CountDownLatch(1);
 
             CompletableFuture<Void> first = CompletableFuture.runAsync(() -> transactions.inTransaction(() -> {
-                assertThat(keys.claim(key, entry.id())).isEmpty();
+                assertThat(keys.claim(key, IdempotentOperation.TRANSFER, entry.id().value())).isEmpty();
                 claimed.countDown();
                 await(release);
                 entries.add(entry);
                 return null;
             }));
             await(claimed);
-            CompletableFuture<Optional<JournalEntryId>> second = CompletableFuture.supplyAsync(
-                    () -> transactions.inTransaction(() -> keys.claim(key, JournalEntryId.random())));
+            CompletableFuture<Optional<Claim>> second = CompletableFuture.supplyAsync(
+                    () -> transactions.inTransaction(() -> keys.claim(key, IdempotentOperation.TRANSFER, UUID.randomUUID())));
             Thread.sleep(WAIT_MS);
             assertThat(second).isNotDone();
 
             release.countDown();
             first.get(10, TimeUnit.SECONDS);
-            assertThat(second.get(10, TimeUnit.SECONDS)).contains(entry.id());
+            assertThat(second.get(10, TimeUnit.SECONDS)).contains(new Claim(IdempotentOperation.TRANSFER, entry.id().value()));
         }
 
         @Test
@@ -514,9 +517,116 @@ class LedgerStoreTest {
             JournalEntry entry = newEntry(cash, savings, "1");
 
             for (String invalid : List.of("", "con espacio", "k".repeat(256))) {
-                assertThatThrownBy(() -> jdbc.sql("INSERT INTO idempotency_key (key, journal_entry_id) VALUES (:k, :e)")
+                assertThatThrownBy(() -> jdbc.sql("INSERT INTO idempotency_key (key, operation, journal_entry_id) VALUES (:k, 'TRANSFER', :e)")
                         .param("k", invalid).param("e", entry.id().value()).update())
                         .as(invalid).hasStackTraceContaining("idempotency_key_");
+            }
+        }
+    }
+
+    /** Idempotencia generalizada y asientos por cuenta (ADR-0009, migración V3). */
+    @Nested
+    class ApiV1Support {
+
+        private JournalEntry entryOn(LocalDate date, Account debited, Account credited, String amount) {
+            JournalEntry entry = JournalEntry.post(JournalEntryId.random(), date, "Mercado " + amount,
+                    List.of(debit(debited.id(), Money.of(amount)), credit(credited.id(), Money.of(amount))));
+            entries.add(entry);
+            return entry;
+        }
+
+        @Test
+        void aKeyCanPointToAnAccount() {
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+            Account account = new Account(AccountId.random(), "Cuenta de ahorros", AccountType.ASSET);
+
+            assertThat(transactions.inTransaction(() -> {
+                Optional<Claim> claim = keys.claim(key, IdempotentOperation.ACCOUNT, account.id().value());
+                accounts.add(account);
+                return claim;
+            })).isEmpty();
+
+            assertThat(transactions.inTransaction(() -> keys.claim(key, IdempotentOperation.TRANSFER, UUID.randomUUID())))
+                    .contains(new Claim(IdempotentOperation.ACCOUNT, account.id().value()));
+        }
+
+        @Test
+        void anAccountKeyWithoutItsAccountCannotBeCommitted() {
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+
+            assertThatThrownBy(() -> transactions.inTransaction(
+                    () -> keys.claim(key, IdempotentOperation.ACCOUNT, UUID.randomUUID())))
+                    .hasStackTraceContaining("idempotency_key_account_id_fkey");
+        }
+
+        @Test
+        void aKeyPointsToExactlyOneResourceOfItsKind() {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account cash = newAccount("Efectivo", AccountType.ASSET);
+            JournalEntry entry = newEntry(cash, savings, "1");
+            String insert = "INSERT INTO idempotency_key (key, operation, account_id, journal_entry_id) VALUES (:k, :op, :a, :e)";
+
+            for (Object[] row : List.<Object[]>of(
+                    new Object[]{"ACCOUNT", null, entry.id().value()},
+                    new Object[]{"TRANSFER", savings.id().value(), null},
+                    new Object[]{"ACCOUNT", savings.id().value(), entry.id().value()},
+                    new Object[]{"OTRA", null, entry.id().value()})) {
+                assertThatThrownBy(() -> jdbc.sql(insert)
+                        .param("k", UUID.randomUUID().toString())
+                        .param("op", row[0])
+                        .param("a", row[1], java.sql.Types.OTHER)
+                        .param("e", row[2], java.sql.Types.OTHER)
+                        .update())
+                        .as(String.valueOf(row[0])).hasStackTraceContaining("idempotency_key_");
+            }
+        }
+
+        @Test
+        void listsAccountsInCreationOrder() {
+            Account first = newAccount("Primera", AccountType.ASSET);
+            Account second = newAccount("Segunda", AccountType.INCOME);
+
+            List<Account> all = accounts.findAll();
+
+            assertThat(all).containsSubsequence(first, second);
+        }
+
+        @Test
+        void pagesEntriesFromNewestToOldestWithAStableCursor() {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account groceries = newAccount("Mercado", AccountType.EXPENSE);
+            Account other = newAccount("Otra", AccountType.ASSET);
+            JournalEntry old = entryOn(DATE.minusDays(3), groceries, savings, "1");
+            JournalEntry sameDayFirst = entryOn(DATE, groceries, savings, "2");
+            JournalEntry sameDaySecond = entryOn(DATE, groceries, savings, "3");
+            JournalEntry newest = entryOn(DATE.plusDays(1), groceries, savings, "4");
+            entryOn(DATE, groceries, other, "99");
+
+            EntryPage first = entries.entriesOf(savings.id(), null, 2);
+            assertThat(first.entries()).containsExactly(newest, sameDaySecond);
+            assertThat(first.entries().getFirst().lines()).isEqualTo(newest.lines());
+
+            // Un asiento nuevo no desplaza las páginas siguientes.
+            entryOn(DATE.plusDays(5), groceries, savings, "5");
+            EntryPage second = entries.entriesOf(savings.id(), first.nextCursor().orElseThrow(), 2);
+            assertThat(second.entries()).containsExactly(sameDayFirst, old);
+            assertThat(second.nextCursor()).isEmpty();
+        }
+
+        @Test
+        void anAccountWithoutEntriesHasAnEmptyPage() {
+            Account empty = newAccount("Vacía", AccountType.ASSET);
+
+            assertThat(entries.entriesOf(empty.id(), null, 50)).isEqualTo(new EntryPage(List.of(), Optional.empty()));
+        }
+
+        @Test
+        void rejectsCursorsItDidNotProduce() {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+
+            for (String cursor : List.of("no-es-base64!", "aG9sYQ", "MjAyNi0xMS0yOHx4fHk")) {
+                assertThatThrownBy(() -> entries.entriesOf(savings.id(), cursor, 10))
+                        .as(cursor).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("cursor");
             }
         }
     }

@@ -5,6 +5,7 @@ import io.github.morganbyte.zpenz.model.ledger.AccountNotFoundException;
 import io.github.morganbyte.zpenz.model.ledger.AccountType;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKeyReusedException;
+import io.github.morganbyte.zpenz.model.ledger.IdempotentOperation;
 import io.github.morganbyte.zpenz.model.ledger.InsufficientFundsException;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
@@ -16,7 +17,6 @@ import io.github.morganbyte.zpenz.model.ledger.gateways.Transactions;
 import io.github.morganbyte.zpenz.model.money.Money;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Registra una transferencia completa o nada, una sola vez por clave de idempotencia y sin
@@ -26,61 +26,45 @@ public class TransferUseCase {
 
     private final AccountRepository accounts;
     private final JournalEntryRepository entries;
-    private final IdempotencyKeyRepository keys;
-    private final Transactions transactions;
+    private final IdempotentRunner idempotent;
 
     public TransferUseCase(AccountRepository accounts, JournalEntryRepository entries,
                            IdempotencyKeyRepository keys, Transactions transactions) {
         this.accounts = Objects.requireNonNull(accounts);
         this.entries = Objects.requireNonNull(entries);
-        this.keys = Objects.requireNonNull(keys);
-        this.transactions = Objects.requireNonNull(transactions);
-    }
-
-    /** El asiento de la transferencia y si es la repetición de una ya registrada. */
-    public record Result(JournalEntry entry, boolean replayed) {
+        this.idempotent = new IdempotentRunner(keys, transactions);
     }
 
     /**
      * @throws AccountNotFoundException si el origen o el destino no existen
      * @throws InsufficientFundsException si el origen es un activo y quedaría en negativo
-     * @throws IdempotencyKeyReusedException si la clave ya se usó para otra transferencia
+     * @throws IdempotencyKeyReusedException si la clave ya se usó para otra petición
      */
-    public Result transfer(IdempotencyKey key, Transfer transfer) {
-        Objects.requireNonNull(key, "La clave de idempotencia es obligatoria");
+    public Idempotent<JournalEntry> transfer(IdempotencyKey key, Transfer transfer) {
         Objects.requireNonNull(transfer, "La transferencia es obligatoria");
-        return transactions.inTransaction(() -> {
-            JournalEntryId entryId = JournalEntryId.random();
-            // Primero la clave: una repetición simultánea espera aquí a que esta termine.
-            Optional<JournalEntryId> previous = keys.claim(key, entryId);
-            if (previous.isPresent()) {
-                return replay(key, transfer, previous.get());
-            }
-            // Después el origen: otra transferencia desde la misma cuenta espera aquí.
-            Account source = accounts.lockById(transfer.from())
-                    .orElseThrow(() -> new AccountNotFoundException(transfer.from()));
-            if (accounts.findById(transfer.to()).isEmpty()) {
-                throw new AccountNotFoundException(transfer.to());
-            }
-            if (source.type() == AccountType.ASSET) {
-                Money balance = source.balance(entries.totalsFor(source.id()));
-                if (balance.minus(transfer.amount()).isNegative()) {
-                    throw new InsufficientFundsException(source.id(), balance, transfer.amount());
-                }
-            }
-            JournalEntry entry = transfer.toEntry(entryId);
-            entries.add(entry);
-            return new Result(entry, false);
-        });
+        JournalEntryId entryId = JournalEntryId.random();
+        // La clave se reclama primero: una repetición simultánea espera ahí a que esta termine.
+        return idempotent.run(key, IdempotentOperation.TRANSFER, entryId.value(),
+                () -> record(transfer, entryId),
+                id -> entries.findById(new JournalEntryId(id)).orElseThrow(() -> IdempotentRunner.dangling(key, id)),
+                transfer::matches);
     }
 
-    private Result replay(IdempotencyKey key, Transfer transfer, JournalEntryId previousId) {
-        JournalEntry previous = entries.findById(previousId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "La clave " + key.value() + " apunta al asiento " + previousId.value() + ", que no existe"));
-        if (!transfer.matches(previous)) {
-            throw new IdempotencyKeyReusedException(key);
+    private JournalEntry record(Transfer transfer, JournalEntryId entryId) {
+        // Otra transferencia desde la misma cuenta espera aquí hasta que esta termine.
+        Account source = accounts.lockById(transfer.from())
+                .orElseThrow(() -> new AccountNotFoundException(transfer.from()));
+        if (accounts.findById(transfer.to()).isEmpty()) {
+            throw new AccountNotFoundException(transfer.to());
         }
-        return new Result(previous, true);
+        if (source.type() == AccountType.ASSET) {
+            Money balance = source.balance(entries.totalsFor(source.id()));
+            if (balance.minus(transfer.amount()).isNegative()) {
+                throw new InsufficientFundsException(source.id(), balance, transfer.amount());
+            }
+        }
+        JournalEntry entry = transfer.toEntry(entryId);
+        entries.add(entry);
+        return entry;
     }
 }

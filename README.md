@@ -100,30 +100,36 @@ La imagen compila el proyecto por dentro, así que no hace falta correr `./gradl
 
 ## Cómo usar la API
 
-Rutas provisionales de la Fase 3 ([ADR-0008](docs/adr/0008-transferencias-atomicas-idempotentes-concurrentes.md)); la Fase 4 fija el contrato con OpenAPI. Todas exigen `Authorization: Bearer $API_TOKEN` y responden los errores en formato *Problem Details*.
+La documentación interactiva está en **[/swagger-ui.html](https://zpenz.onrender.com/swagger-ui.html)** y el contrato OpenAPI en [`docs/api/openapi.yaml`](docs/api/openapi.yaml) ([ADR-0009](docs/adr/0009-api-rest-v1-openapi.md)). Swagger UI es público; para probar la API, use el botón *Authorize* con el token.
+
+Reglas de la API v1:
+
+- Todas las rutas están bajo `/api/v1` y exigen `Authorization: Bearer $API_TOKEN` hasta la Fase 5.
+- Todo `POST` exige `Idempotency-Key`. Repetir la petición con la misma clave devuelve el mismo recurso con `Idempotent-Replayed: true`; otra petición con la misma clave responde 422.
+- Los montos son **texto** con hasta dos decimales (`"70000.50"`). Un número JSON se rechaza.
+- Los errores siguen *Problem Details* (RFC 9457) con un campo `code` estable, por ejemplo `insufficient-funds`.
 
 ```bash
-API=http://localhost:8080
+API=http://localhost:8080/api/v1
 AUTH="Authorization: Bearer $API_TOKEN"
 
 # Cuentas: ASSET, LIABILITY, EQUITY, INCOME o EXPENSE.
-curl -s -H "$AUTH" -H 'Content-Type: application/json' $API/accounts \
-  -d '{"name":"Cuenta de ahorros","type":"ASSET"}'          # {"id":"<ahorros>", ...}
+curl -s -H "$AUTH" -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" $API/accounts \
+  -d '{"name":"Cuenta de ahorros","type":"ASSET"}'
 
-# Transferencia: exige Idempotency-Key. Repetirla con la misma clave no la duplica.
+# Transferencia: no puede dejar en negativo una cuenta de activo.
 curl -s -H "$AUTH" -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" $API/transfers \
   -d '{"from":"<origen>","to":"<destino>","amount":"70000.00","date":"2026-11-28","description":"Retiro"}'
 
-curl -s -H "$AUTH" $API/accounts/<ahorros>/balance        # {"accountId":"...","balance":"30000.00"}
+curl -s -H "$AUTH" $API/accounts                          # cuentas con su saldo
+curl -s -H "$AUTH" "$API/accounts/<id>/entries?limit=20"  # asientos, del más reciente al más antiguo
 ```
 
-| Respuesta | Cuándo |
-|---|---|
-| 201 | Transferencia registrada. Con `Idempotent-Replayed: true` si es la repetición de una ya registrada. |
-| 400 | Falta un dato, la clave o el monto tiene más de dos decimales. |
-| 401 | Falta el token o no es válido. |
-| 404 | Una de las cuentas no existe. |
-| 422 | Fondos insuficientes en una cuenta de activo, o la clave ya se usó para otra transferencia. |
+Si un cambio de código altera la API, `OpenApiContractTest` falla hasta que se regenere el contrato:
+
+```bash
+UPDATE_OPENAPI=true ./gradlew :app-service:test --tests '*OpenApiContractTest' --rerun
+```
 
 ## Despliegue
 

@@ -4,7 +4,9 @@ import io.github.morganbyte.zpenz.model.ledger.Account;
 import io.github.morganbyte.zpenz.model.ledger.AccountId;
 import io.github.morganbyte.zpenz.model.ledger.EntryAlreadyReversedException;
 import io.github.morganbyte.zpenz.model.ledger.EntryLine;
+import io.github.morganbyte.zpenz.model.ledger.EntryPage;
 import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
+import io.github.morganbyte.zpenz.model.ledger.IdempotentOperation;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
 import io.github.morganbyte.zpenz.model.ledger.Side;
@@ -15,11 +17,15 @@ import io.github.morganbyte.zpenz.model.ledger.gateways.JournalEntryRepository;
 import io.github.morganbyte.zpenz.model.ledger.gateways.Transactions;
 import io.github.morganbyte.zpenz.model.money.Money;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -31,7 +37,7 @@ class InMemoryLedger implements AccountRepository, JournalEntryRepository, Idemp
 
     final Map<AccountId, Account> accounts = new LinkedHashMap<>();
     final Map<JournalEntryId, JournalEntry> entries = new LinkedHashMap<>();
-    final Map<IdempotencyKey, JournalEntryId> keys = new LinkedHashMap<>();
+    final Map<IdempotencyKey, Claim> keys = new LinkedHashMap<>();
     int transactionsStarted;
 
     @Override
@@ -39,7 +45,7 @@ class InMemoryLedger implements AccountRepository, JournalEntryRepository, Idemp
         transactionsStarted++;
         Map<AccountId, Account> accountsBefore = new LinkedHashMap<>(accounts);
         Map<JournalEntryId, JournalEntry> entriesBefore = new LinkedHashMap<>(entries);
-        Map<IdempotencyKey, JournalEntryId> keysBefore = new LinkedHashMap<>(keys);
+        Map<IdempotencyKey, Claim> keysBefore = new LinkedHashMap<>(keys);
         try {
             return work.get();
         } catch (RuntimeException e) {
@@ -54,8 +60,26 @@ class InMemoryLedger implements AccountRepository, JournalEntryRepository, Idemp
     }
 
     @Override
-    public Optional<JournalEntryId> claim(IdempotencyKey key, JournalEntryId entryId) {
-        return Optional.ofNullable(keys.putIfAbsent(key, entryId));
+    public Optional<Claim> claim(IdempotencyKey key, IdempotentOperation operation, UUID resourceId) {
+        return Optional.ofNullable(keys.putIfAbsent(key, new Claim(operation, resourceId)));
+    }
+
+    @Override
+    public List<Account> findAll() {
+        return List.copyOf(accounts.values());
+    }
+
+    /** El cursor es la posición en la lista ordenada: basta para probar los casos de uso. */
+    @Override
+    public EntryPage entriesOf(AccountId accountId, String after, int limit) {
+        List<JournalEntry> all = new ArrayList<>(entries.values().stream()
+                .filter(e -> e.lines().stream().anyMatch(l -> l.accountId().equals(accountId)))
+                .toList());
+        java.util.Collections.reverse(all);
+        all.sort(Comparator.comparing(JournalEntry::date).reversed());
+        int from = after == null ? 0 : Integer.parseInt(after);
+        int to = Math.min(all.size(), from + limit);
+        return new EntryPage(all.subList(from, to), to < all.size() ? Optional.of(String.valueOf(to)) : Optional.empty());
     }
 
     @Override

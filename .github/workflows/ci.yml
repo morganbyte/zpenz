@@ -95,8 +95,13 @@ jobs:
               curl -sf http://localhost:8080/actuator/info | grep -q '"commit":"${{ github.sha }}"' \
                 || { echo "/actuator/info no reporta el commit"; curl -s http://localhost:8080/actuator/info; exit 1; }
               # La API exige el token (ADR-0008): sin él responde 401.
-              status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/accounts)
-              [ "$status" = "401" ] || { echo "/accounts sin token respondió $status, se esperaba 401"; exit 1; }
+              status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/v1/accounts)
+              [ "$status" = "401" ] || { echo "/api/v1/accounts sin token respondió $status, se esperaba 401"; exit 1; }
+              # Swagger UI y la especificación son públicos (ADR-0009).
+              curl -sfL http://localhost:8080/swagger-ui.html | grep -q swagger-ui \
+                || { echo "Swagger UI no responde"; exit 1; }
+              curl -sf http://localhost:8080/v3/api-docs | grep -q '"/api/v1/transfers"' \
+                || { echo "/v3/api-docs no publica la API"; exit 1; }
               exit 0
             fi
             sleep 1

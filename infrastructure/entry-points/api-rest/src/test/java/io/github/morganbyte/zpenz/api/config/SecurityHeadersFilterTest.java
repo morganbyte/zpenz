@@ -40,4 +40,18 @@ class SecurityHeadersFilterTest {
         assertEquals("no-cache", response.getHeader("Pragma"));
         assertEquals("strict-origin-when-cross-origin", response.getHeader("Referrer-Policy"));
     }
+
+    @Test
+    void relaxesTheContentSecurityPolicyOnlyForSwaggerUi() throws IOException, ServletException {
+        MockHttpServletRequest swagger = new MockHttpServletRequest("GET", "/swagger-ui/index.html");
+        MockHttpServletResponse swaggerResponse = new MockHttpServletResponse();
+        filter.doFilter(swagger, swaggerResponse, new MockFilterChain());
+
+        MockHttpServletRequest api = new MockHttpServletRequest("GET", "/api/v1/accounts");
+        MockHttpServletResponse apiResponse = new MockHttpServletResponse();
+        filter.doFilter(api, apiResponse, new MockFilterChain());
+
+        assertEquals(SecurityHeadersFilter.SWAGGER_UI_POLICY, swaggerResponse.getHeader("Content-Security-Policy"));
+        assertEquals(SecurityHeadersFilter.DEFAULT_POLICY, apiResponse.getHeader("Content-Security-Policy"));
+    }
 }

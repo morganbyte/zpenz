@@ -37,5 +37,17 @@ info:
 # Token compartido de la API hasta la Fase 5 (ADR-0008). Sin API_TOKEN la aplicación no arranca.
 zpenz:
   api-token: ${API_TOKEN}
+# OpenAPI y Swagger UI (ADR-0009). Solo se documenta /api/**; el orden por claves hace que la
+# especificación generada sea estable y se pueda comparar con docs/api/openapi.yaml.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  paths-to-match: /api/**
+  show-actuator: false
+  writer-with-order-by-keys: true
+  override-with-generic-response: false
+  default-produces-media-type: application/json
 cors:
   allowed-origins: "http://localhost:4200,http://localhost:8080"

@@ -4,6 +4,7 @@ import io.github.morganbyte.zpenz.model.ledger.Account;
 import io.github.morganbyte.zpenz.model.ledger.AccountId;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -14,6 +15,9 @@ public interface AccountRepository {
     void add(Account account);
 
     Optional<Account> findById(AccountId id);
+
+    /** Todas las cuentas, en el orden en que se crearon. */
+    List<Account> findAll();
 
     /**
      * Lee la cuenta y la bloquea hasta el final de la transacción: otra transacción que pida

@@ -63,8 +63,7 @@ public final class JournalEntry {
      */
     public JournalEntry reverse(JournalEntryId reversalId, LocalDate reversalDate, String reversalDescription) {
         if (isReversal()) {
-            throw new IllegalStateException(
-                    "El asiento " + id.value() + " ya es un reverso y no se puede reversar; registre un asiento nuevo");
+            throw new EntryIsReversalException(id);
         }
         Objects.requireNonNull(reversalDate, "La fecha del reverso es obligatoria");
         if (reversalDate.isBefore(date)) {
@@ -96,6 +95,19 @@ public final class JournalEntry {
             }
         }
         return total;
+    }
+
+    /**
+     * Si los dos asientos dicen lo mismo: fecha, descripción, líneas en el mismo orden y el
+     * mismo asiento reversado. No compara el identificador. Sirve para reconocer la repetición
+     * de una petición (ADR-0009).
+     */
+    public boolean sameContentAs(JournalEntry other) {
+        Objects.requireNonNull(other, "El asiento es obligatorio");
+        return date.equals(other.date)
+                && description.equals(other.description)
+                && lines.equals(other.lines)
+                && Objects.equals(reversalOf, other.reversalOf);
     }
 
     public boolean isReversal() {
