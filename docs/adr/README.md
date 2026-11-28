@@ -17,4 +17,4 @@ Reglas:
 | [0005](0005-despliegue-gratuito-aws-al-final.md) | Desplegar en planes gratuitos permanentes y dejar AWS para una demostración final | Aceptado |
 | [0006](0006-modelo-contable-doble-partida.md) | Modelo contable de doble partida con saldo calculado | Aceptado |
 | [0007](0007-persistencia-jdbcclient-flyway.md) | Persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base | Aceptado |
-| [0008](0008-transferencias-atomicas-idempotentes-concurrentes.md) | Transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal | Propuesto |
+| [0008](0008-transferencias-atomicas-idempotentes-concurrentes.md) | Transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal | Aceptado |

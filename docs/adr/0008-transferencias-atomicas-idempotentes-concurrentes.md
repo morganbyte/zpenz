@@ -1,6 +1,6 @@
 # ADR-0008: Transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-28
 
 ## Contexto

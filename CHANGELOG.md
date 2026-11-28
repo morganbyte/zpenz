@@ -8,7 +8,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Agregado
 
-- ADR-0008: transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal.
+- ADR-0008 (aceptado): transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal.
 - Transferencias (`TransferUseCase`): un asiento de dos líneas que se registra completo o nada. Una transferencia no puede dejar en negativo una cuenta de activo, aunque lleguen varias al mismo tiempo: la cuenta de origen se bloquea con `FOR NO KEY UPDATE` mientras se revisa su saldo.
 - Idempotencia: migración V2 con la tabla `idempotency_key`. Repetir una transferencia con la misma clave devuelve la original sin registrar nada; usar la clave para otra transferencia se rechaza.
 - Puerto `Transactions` para que los casos de uso abran una transacción sin conocer Spring.
