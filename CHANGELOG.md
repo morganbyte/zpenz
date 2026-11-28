@@ -8,7 +8,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Agregado
 
-- ADR-0009: API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio.
+- ADR-0009 (aceptado): API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio.
 - API v1 bajo `/api/v1`: crear, listar y ver cuentas con su saldo; ver los asientos de una cuenta con paginación por cursor; registrar, ver y reversar asientos; registrar transferencias.
 - Swagger UI público en `/swagger-ui.html` y especificación OpenAPI 3.1 en `/v3/api-docs`, con el esquema `bearer` para probar la API desde *Authorize*.
 - Contrato guardado en `docs/api/openapi.yaml`: `OpenApiContractTest` falla si el código cambia la API sin actualizarlo.

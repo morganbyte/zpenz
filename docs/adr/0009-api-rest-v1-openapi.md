@@ -1,6 +1,6 @@
 # ADR-0009: API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-28
 
 ## Contexto
