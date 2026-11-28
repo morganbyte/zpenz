@@ -10,6 +10,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 - `/actuator/prometheus` deja de ser público: solo se expone `/actuator/health`. Las métricas se vuelven a abrir, con protección, en la Fase 8.
 
+### Cambiado
+
+- Plugin Clean Architecture de Bancolombia actualizado de 5.3.0 a 5.4.0.
+
 ## [0.1.0] - 2026-11-27
 
 Cierra la Fase 0: el esqueleto está desplegado y `/actuator/health` responde en https://zpenz.onrender.com.
