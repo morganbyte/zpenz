@@ -6,6 +6,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Agregado
+
+- ADR-0006: modelo contable de doble partida con saldo calculado.
+- Motor contable en Java puro (`domain/model`): `Money` (COP exacto con dos decimales, rechaza más decimales y montos que no caben en `NUMERIC(19,2)`), cuentas de cinco tipos con su lado normal, asientos inmutables que no pueden existir descuadrados, reversos y saldo calculado desde los asientos.
+- Pruebas unitarias del dominio y reglas ArchUnit que fallan el build si el dominio depende de algo fuera del JDK.
+
 ### Seguridad
 
 - `/actuator/prometheus` deja de ser público: solo se expone `/actuator/health`. Las métricas se vuelven a abrir, con protección, en la Fase 8.

@@ -4,7 +4,7 @@ Plataforma de finanzas personales construida por dentro como un **core bancario*
 
 No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el saldo se **calcula a partir de asientos contables de doble partida**, nada se borra (se reversa) y dos operaciones simultáneas no se pisan.
 
-> **Estado:** Fase 0 terminada (v0.1.0): el esqueleto está desplegado en https://zpenz.onrender.com/actuator/health. Siguiente: Fase 1, motor contable. Todavía no hay funcionalidad de negocio.
+> **Estado:** Fase 0 terminada (v0.1.0): el esqueleto está desplegado en https://zpenz.onrender.com/actuator/health. En curso: Fase 1, motor contable. Todavía no hay funcionalidad expuesta por la API.
 
 ## Principios
 
