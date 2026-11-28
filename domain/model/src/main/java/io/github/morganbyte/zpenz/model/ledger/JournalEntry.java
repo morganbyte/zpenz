@@ -13,6 +13,8 @@ import java.util.Optional;
  */
 public final class JournalEntry {
 
+    public static final int DESCRIPTION_MAX_LENGTH = 255;
+
     private final JournalEntryId id;
     private final LocalDate date;
     private final String description;
@@ -28,6 +30,10 @@ public final class JournalEntry {
         if (this.description.isEmpty()) {
             throw new IllegalArgumentException("La descripción del asiento no puede estar vacía");
         }
+        if (this.description.length() > DESCRIPTION_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                    "La descripción del asiento no puede pasar de " + DESCRIPTION_MAX_LENGTH + " caracteres");
+        }
         Objects.requireNonNull(lines, "Las líneas del asiento son obligatorias");
         this.lines = List.copyOf(lines);
         this.reversalOf = reversalOf;
@@ -40,9 +46,20 @@ public final class JournalEntry {
     }
 
     /**
+     * Reconstruye un asiento ya registrado, por ejemplo al leerlo de la base. Aplica las
+     * mismas reglas que {@link #post}: un asiento descuadrado no se puede reconstruir.
+     *
+     * @param reversalOf el asiento que este reversa, o {@code null} si no es un reverso
+     */
+    public static JournalEntry restore(JournalEntryId id, LocalDate date, String description,
+                                       List<EntryLine> lines, JournalEntryId reversalOf) {
+        return new JournalEntry(id, date, description, lines, reversalOf);
+    }
+
+    /**
      * Crea el asiento que anula a este: las mismas líneas con los lados invertidos. Este
-     * asiento no cambia. Que un asiento se reverse una sola vez se controla donde se
-     * registran los asientos (Fase 3), no aquí.
+     * asiento no cambia. Que un asiento se reverse una sola vez depende de los asientos ya
+     * registrados y se controla al registrarlo (ADR-0007), no aquí.
      */
     public JournalEntry reverse(JournalEntryId reversalId, LocalDate reversalDate, String reversalDescription) {
         if (isReversal()) {

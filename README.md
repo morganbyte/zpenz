@@ -63,17 +63,38 @@ No hace falta instalar Gradle: el proyecto trae el wrapper (`./gradlew`).
 ./gradlew build      # compila, corre pruebas y genera reporte de cobertura
 ```
 
-El reporte de cobertura de JaCoCo queda en `build/reports/`.
+El reporte de cobertura de JaCoCo queda en `build/reports/`. Las pruebas de persistencia levantan PostgreSQL con Testcontainers, así que Docker debe estar corriendo.
+
+## Cómo correr en local
+
+```bash
+./gradlew :app-service:bootTestRun     # levanta PostgreSQL con Testcontainers y la aplicación
+curl localhost:8080/actuator/health    # {"status":"UP", ...}
+```
+
+No hace falta instalar PostgreSQL. Los datos se pierden al detener la aplicación.
 
 ## Cómo correr con Docker
 
+La aplicación necesita PostgreSQL ([ADR-0007](docs/adr/0007-persistencia-jdbcclient-flyway.md)). Flyway crea las tablas al arrancar.
+
 ```bash
+docker network create zpenz
+docker run -d --name db --network zpenz -e POSTGRES_DB=zpenz -e POSTGRES_USER=zpenz -e POSTGRES_PASSWORD=zpenz postgres:17-alpine
 docker build -f deployment/Dockerfile -t zpenz .
-docker run --rm -p 8080:8080 zpenz
+docker run --rm --network zpenz -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://db:5432/zpenz -e DB_USERNAME=zpenz -e DB_PASSWORD=zpenz zpenz
 curl localhost:8080/actuator/health   # {"status":"UP", ...}
 ```
 
 La imagen compila el proyecto por dentro, así que no hace falta correr `./gradlew build` antes. El puerto se puede cambiar con la variable `PORT`.
+
+| Variable | Para qué |
+|---|---|
+| `DB_URL` | URL JDBC de PostgreSQL. Debe empezar por `jdbc:postgresql://`. |
+| `DB_USERNAME`, `DB_PASSWORD` | Credenciales de la base. |
+| `PORT` | Puerto HTTP (por defecto 8080). |
+| `RENDER_GIT_COMMIT` | Commit que muestra `/actuator/info`. Render la define sola. |
 
 ## Despliegue
 
@@ -81,6 +102,9 @@ La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-des
 
 - **Nunca registres un método de pago en Render.** Sin tarjeta, al agotar los límites gratuitos Render suspende el servicio. Con tarjeta, cobra el excedente.
 - El servicio gratuito se duerme tras 15 minutos sin tráfico. La primera petición después de una pausa puede tardar entre 2 y 3 minutos.
+- La base es PostgreSQL 17 en el plan gratuito de Neon. `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` se configuran en el panel de Render, nunca en el repositorio. `DB_URL` usa el endpoint **directo** de Neon (sin `-pooler` en el host) con `?sslmode=require`.
+- `/actuator/health` incluye la base: si Neon no responde, el servicio aparece caído.
+- `/actuator/info` muestra el commit desplegado, para verificar cada despliegue.
 
 ## Hoja de ruta
 

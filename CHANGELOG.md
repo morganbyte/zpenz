@@ -6,6 +6,19 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Agregado
+
+- ADR-0007 (aceptado): persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base.
+- Persistencia en PostgreSQL (`ledger-store`): migración V1 con cuentas, asientos y líneas en `NUMERIC(19,2)`. La base rechaza asientos descuadrados (al final de la transacción), cambios y borrados de asientos, reversar dos veces un asiento o reversar un reverso.
+- Puertos del libro en el dominio y casos de uso: crear cuenta, registrar asiento, reversar asiento y consultar saldo.
+- `/actuator/info` muestra el commit desplegado (`RENDER_GIT_COMMIT`).
+- Pruebas contra PostgreSQL 17 con Testcontainers, y `./gradlew :app-service:bootTestRun` para correr en local sin instalar PostgreSQL.
+
+### Cambiado
+
+- La aplicación necesita PostgreSQL para arrancar (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`), y `/actuator/health` incluye el estado de la base.
+- El CI levanta PostgreSQL para verificar la imagen Docker y comprueba que `/actuator/info` reporte el commit.
+
 ## [0.2.0] - 2026-11-28
 
 Cierra la Fase 1: el motor contable de doble partida está en el dominio, en Java puro, con sus pruebas en el CI.

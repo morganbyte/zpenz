@@ -8,16 +8,31 @@ spring:
     add-properties: false
   profiles:
     include: null
+  # PostgreSQL en Neon (ADR-0005 y ADR-0007). En Neon se usa el endpoint directo, no el
+  # pooler: Flyway usa bloqueos de sesión que el pooler en modo transacción no respeta.
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
 management:
   endpoints:
     web:
       exposure:
-        # Solo health es público. Las métricas (prometheus) se vuelven a exponer,
+        # Solo health e info son públicos. Las métricas (prometheus) se vuelven a exponer,
         # con protección, en la Fase 8 (observabilidad).
-        include: "health"
+        include: "health,info"
   endpoint:
     health:
       probes:
         enabled: true
+  info:
+    env:
+      enabled: true
+# Render indica el commit desplegado en RENDER_GIT_COMMIT, también en tiempo de ejecución.
+info:
+  app:
+    commit: ${RENDER_GIT_COMMIT:desconocido}
 cors:
   allowed-origins: "http://localhost:4200,http://localhost:8080"

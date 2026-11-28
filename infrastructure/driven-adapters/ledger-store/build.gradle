@@ -1,0 +1,11 @@
+dependencies {
+    implementation project(':model')
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    // Flyway aplica las migraciones de src/main/resources/db/migration al arrancar (ADR-0007).
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+}

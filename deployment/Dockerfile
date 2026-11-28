@@ -15,6 +15,7 @@ COPY applications/app-service/build.gradle applications/app-service/
 COPY domain/model/build.gradle domain/model/
 COPY domain/usecase/build.gradle domain/usecase/
 COPY infrastructure/entry-points/api-rest/build.gradle infrastructure/entry-points/api-rest/
+COPY infrastructure/driven-adapters/ledger-store/build.gradle infrastructure/driven-adapters/ledger-store/
 RUN ./gradlew --no-daemon --no-configuration-cache help
 
 # Las pruebas corren en el CI; aquí solo se empaqueta.

@@ -89,4 +89,42 @@ class AccountTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new Account(AccountId.random(), " ", AccountType.ASSET));
     }
+
+    @Test
+    void rejectsNamesLongerThanTheLimit() {
+        String longest = "a".repeat(Account.NAME_MAX_LENGTH);
+
+        assertThat(new Account(AccountId.random(), longest, AccountType.ASSET).name()).hasSize(100);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new Account(AccountId.random(), longest + "a", AccountType.ASSET))
+                .withMessageContaining("100 caracteres");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ASSET, 700, 200, 500", "EXPENSE, 700, 200, 500",
+            "LIABILITY, 200, 700, 500", "EQUITY, 200, 700, 500", "INCOME, 200, 700, 500",
+            "ASSET, 200, 700, -500"})
+    void calculatesTheBalanceFromSideTotals(AccountType type, String debits, String credits, String expected) {
+        Account account = new Account(AccountId.random(), "Cuenta", type);
+
+        assertThat(account.balance(new SideTotals(Money.of(debits), Money.of(credits)))).isEqualTo(Money.of(expected));
+    }
+
+    @Test
+    void balanceFromEntriesMatchesBalanceFromTotals() {
+        List<JournalEntry> month = List.of(
+                entry("Salario", savings, salary, "4500000"),
+                entry("Mercado", groceries, savings, "250000.50"));
+
+        assertThat(savings.balance(month))
+                .isEqualTo(savings.balance(new SideTotals(Money.of("4500000"), Money.of("250000.50"))));
+    }
+
+    @Test
+    void sideTotalsCannotBeNegative() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new SideTotals(Money.of("-1"), Money.ZERO));
+        assertThatIllegalArgumentException().isThrownBy(() -> new SideTotals(Money.ZERO, Money.of("-1")));
+        assertThat(SideTotals.NONE.debits()).isEqualTo(Money.ZERO);
+    }
 }
