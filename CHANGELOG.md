@@ -6,6 +6,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [0.4.0] - 2026-11-28
+
+Cierra la Fase 3: las transferencias se registran completas o nada, una sola vez por `Idempotency-Key` y sin sobregirar una cuenta de activo aunque lleguen al mismo tiempo. Verificado en producción.
+
 ### Agregado
 
 - ADR-0008 (aceptado): transferencias con bloqueo de la cuenta de origen, `Idempotency-Key` guardada en la misma transacción y un token temporal.

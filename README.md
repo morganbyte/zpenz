@@ -4,7 +4,7 @@ Plataforma de finanzas personales construida por dentro como un **core bancario*
 
 No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el saldo se **calcula a partir de asientos contables de doble partida**, nada se borra (se reversa) y dos operaciones simultáneas no se pisan.
 
-> **Estado:** Fase 2 terminada (v0.3.0): el libro contable se guarda en PostgreSQL (Neon), con las reglas también en la base, y está desplegado en https://zpenz.onrender.com/actuator/health. Siguiente: Fase 3, transferencias atómicas, idempotentes y concurrentes. Todavía no hay funcionalidad expuesta por la API.
+> **Estado:** Fase 3 terminada (v0.4.0): transferencias atómicas, idempotentes y seguras ante concurrencia, desplegadas en https://zpenz.onrender.com detrás de un token temporal. Siguiente: Fase 4, API REST con OpenAPI.
 
 ## Principios
 
@@ -145,8 +145,8 @@ La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-des
 | 0 | Esqueleto: scaffold, Docker, CI, despliegue en Render | `/actuator/health` responde en una URL pública | ✅ Hecho |
 | 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | ✅ Hecho |
 | 2 | Persistencia con Flyway | Migraciones aplicadas en Neon | ✅ Hecho |
-| 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | 🚧 Siguiente |
-| 4 | API REST + OpenAPI | Swagger accesible | ⏳ |
+| 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | ✅ Hecho |
+| 4 | API REST + OpenAPI | Swagger accesible | 🚧 Siguiente |
 | 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | ⏳ |
 | 6 | Eventos con outbox + RabbitMQ | Broker en la nube | ⏳ |
 | 7 | SonarCloud y cobertura | Quality gate en verde | ⏳ |
