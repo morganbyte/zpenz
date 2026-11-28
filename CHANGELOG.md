@@ -6,6 +6,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [0.3.0] - 2026-11-28
+
+Cierra la Fase 2: el libro contable se persiste en PostgreSQL con Flyway, y la migración V1 está aplicada en Neon.
+
 ### Agregado
 
 - ADR-0007 (aceptado): persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base.
