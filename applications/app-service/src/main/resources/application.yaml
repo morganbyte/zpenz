@@ -34,5 +34,8 @@ management:
 info:
   app:
     commit: ${RENDER_GIT_COMMIT:desconocido}
+# Token compartido de la API hasta la Fase 5 (ADR-0008). Sin API_TOKEN la aplicación no arranca.
+zpenz:
+  api-token: ${API_TOKEN}
 cors:
   allowed-origins: "http://localhost:4200,http://localhost:8080"

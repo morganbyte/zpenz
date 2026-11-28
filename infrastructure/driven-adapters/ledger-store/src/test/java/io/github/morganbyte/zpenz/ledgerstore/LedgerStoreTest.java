@@ -4,6 +4,7 @@ import io.github.morganbyte.zpenz.model.ledger.Account;
 import io.github.morganbyte.zpenz.model.ledger.AccountId;
 import io.github.morganbyte.zpenz.model.ledger.AccountType;
 import io.github.morganbyte.zpenz.model.ledger.EntryAlreadyReversedException;
+import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
 import io.github.morganbyte.zpenz.model.ledger.SideTotals;
@@ -22,7 +23,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static io.github.morganbyte.zpenz.model.ledger.EntryLine.credit;
 import static io.github.morganbyte.zpenz.model.ledger.EntryLine.debit;
@@ -44,6 +49,8 @@ class LedgerStoreTest {
     private static TransactionTemplate transaction;
     private static PostgresAccountRepository accounts;
     private static PostgresJournalEntryRepository entries;
+    private static PostgresIdempotencyKeyRepository keys;
+    private static SpringTransactions transactions;
 
     private static final LocalDate DATE = LocalDate.of(2026, 11, 28);
 
@@ -56,6 +63,8 @@ class LedgerStoreTest {
         transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         accounts = new PostgresAccountRepository(jdbc);
         entries = new PostgresJournalEntryRepository(jdbc, transaction);
+        keys = new PostgresIdempotencyKeyRepository(jdbc);
+        transactions = new SpringTransactions(transaction);
     }
 
     private static Account newAccount(String name, AccountType type) {
@@ -310,7 +319,7 @@ class LedgerStoreTest {
                     .hasStackTraceContaining("solo admite inserciones");
             assertThatThrownBy(() -> jdbc.sql("DELETE FROM entry_line WHERE journal_entry_id = ?").params(id).update())
                     .hasStackTraceContaining("solo admite inserciones");
-            assertThatThrownBy(() -> jdbc.sql("TRUNCATE entry_line, journal_entry").update())
+            assertThatThrownBy(() -> jdbc.sql("TRUNCATE entry_line, journal_entry, idempotency_key").update())
                     .hasStackTraceContaining("solo admite inserciones");
 
             assertThat(entries.findById(entry.id()).orElseThrow().description()).isEqualTo("Mercado");
@@ -346,6 +355,169 @@ class LedgerStoreTest {
                 insertLine(again, 1, debited, "DEBIT", "5");
                 insertLine(again, 2, credited, "CREDIT", "5");
             })).hasStackTraceContaining("ya es un reverso");
+        }
+    }
+
+    /** Lo que necesitan las transferencias (ADR-0008): bloquear el origen y reclamar la clave. */
+    @Nested
+    class TransferSupport {
+
+        private static final long WAIT_MS = 500;
+
+        private JournalEntry unsavedEntry(Account debited, Account credited, String amount) {
+            return JournalEntry.post(JournalEntryId.random(), DATE, "Transferencia",
+                    List.of(debit(debited.id(), Money.of(amount)), credit(credited.id(), Money.of(amount))));
+        }
+
+        /** Abre una transacción en otro hilo que bloquea la cuenta hasta que se suelte el latch. */
+        private CompletableFuture<Void> holdLock(Account account, CountDownLatch locked, CountDownLatch release) {
+            return CompletableFuture.runAsync(() -> transactions.inTransaction(() -> {
+                assertThat(accounts.lockById(account.id())).contains(account);
+                locked.countDown();
+                await(release);
+                return null;
+            }));
+        }
+
+        private static void await(CountDownLatch latch) {
+            try {
+                assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Test
+        void lockingAnAccountMakesTheNextLockWait() throws Exception {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            CountDownLatch locked = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            CompletableFuture<Void> first = holdLock(savings, locked, release);
+            await(locked);
+
+            CompletableFuture<Optional<Account>> second = CompletableFuture.supplyAsync(
+                    () -> transactions.inTransaction(() -> accounts.lockById(savings.id())));
+            Thread.sleep(WAIT_MS);
+            assertThat(second).isNotDone();
+
+            release.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            assertThat(second.get(10, TimeUnit.SECONDS)).contains(savings);
+        }
+
+        @Test
+        void aLockedAccountStillAcceptsEntries() throws Exception {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account salary = newAccount("Salario", AccountType.INCOME);
+            CountDownLatch locked = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            CompletableFuture<Void> lock = holdLock(savings, locked, release);
+            await(locked);
+
+            // La clave foránea de la línea toma FOR KEY SHARE, que no choca con FOR NO KEY UPDATE.
+            CompletableFuture<Void> deposit = CompletableFuture.runAsync(
+                    () -> entries.add(unsavedEntry(savings, salary, "1000")));
+            try {
+                deposit.get(5, TimeUnit.SECONDS);
+            } finally {
+                release.countDown();
+                lock.get(10, TimeUnit.SECONDS);
+            }
+            assertThat(entries.totalsFor(savings.id()).debits()).isEqualTo(Money.of("1000"));
+        }
+
+        @Test
+        void lockingAnUnknownAccountFindsNothing() {
+            assertThat(transactions.inTransaction(() -> accounts.lockById(AccountId.random()))).isEmpty();
+        }
+
+        @Test
+        void claimsAKeyOnceAndReturnsTheEntryOnTheNextClaim() {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account cash = newAccount("Efectivo", AccountType.ASSET);
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+            JournalEntry entry = unsavedEntry(cash, savings, "500");
+
+            Optional<JournalEntryId> first = transactions.inTransaction(() -> {
+                Optional<JournalEntryId> claim = keys.claim(key, entry.id());
+                entries.add(entry);
+                return claim;
+            });
+            Optional<JournalEntryId> second = transactions.inTransaction(
+                    () -> keys.claim(key, JournalEntryId.random()));
+
+            assertThat(first).isEmpty();
+            assertThat(second).contains(entry.id());
+        }
+
+        @Test
+        void aKeyClaimedWithoutItsEntryCannotBeCommitted() {
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+
+            assertThatThrownBy(() -> transactions.inTransaction(() -> keys.claim(key, JournalEntryId.random())))
+                    .hasStackTraceContaining("idempotency_key_journal_entry_id_fkey");
+            assertThat(jdbc.sql("SELECT count(*) FROM idempotency_key WHERE key = :key")
+                    .param("key", key.value()).query(Long.class).single()).isZero();
+        }
+
+        @Test
+        void aRolledBackClaimFreesTheKey() {
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+
+            assertThatThrownBy(() -> transactions.inTransaction(() -> {
+                keys.claim(key, JournalEntryId.random());
+                throw new IllegalStateException("sin fondos");
+            })).hasMessage("sin fondos");
+
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account cash = newAccount("Efectivo", AccountType.ASSET);
+            JournalEntry entry = unsavedEntry(cash, savings, "1");
+            assertThat(transactions.inTransaction(() -> {
+                Optional<JournalEntryId> claim = keys.claim(key, entry.id());
+                entries.add(entry);
+                return claim;
+            })).isEmpty();
+        }
+
+        @Test
+        void aConcurrentClaimWaitsForTheFirstToCommit() throws Exception {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account cash = newAccount("Efectivo", AccountType.ASSET);
+            IdempotencyKey key = new IdempotencyKey(UUID.randomUUID().toString());
+            JournalEntry entry = unsavedEntry(cash, savings, "500");
+            CountDownLatch claimed = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+
+            CompletableFuture<Void> first = CompletableFuture.runAsync(() -> transactions.inTransaction(() -> {
+                assertThat(keys.claim(key, entry.id())).isEmpty();
+                claimed.countDown();
+                await(release);
+                entries.add(entry);
+                return null;
+            }));
+            await(claimed);
+            CompletableFuture<Optional<JournalEntryId>> second = CompletableFuture.supplyAsync(
+                    () -> transactions.inTransaction(() -> keys.claim(key, JournalEntryId.random())));
+            Thread.sleep(WAIT_MS);
+            assertThat(second).isNotDone();
+
+            release.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            assertThat(second.get(10, TimeUnit.SECONDS)).contains(entry.id());
+        }
+
+        @Test
+        void rejectsInvalidKeysWrittenWithSql() {
+            Account savings = newAccount("Cuenta de ahorros", AccountType.ASSET);
+            Account cash = newAccount("Efectivo", AccountType.ASSET);
+            JournalEntry entry = newEntry(cash, savings, "1");
+
+            for (String invalid : List.of("", "con espacio", "k".repeat(256))) {
+                assertThatThrownBy(() -> jdbc.sql("INSERT INTO idempotency_key (key, journal_entry_id) VALUES (:k, :e)")
+                        .param("k", invalid).param("e", entry.id().value()).update())
+                        .as(invalid).hasStackTraceContaining("idempotency_key_");
+            }
         }
     }
 }

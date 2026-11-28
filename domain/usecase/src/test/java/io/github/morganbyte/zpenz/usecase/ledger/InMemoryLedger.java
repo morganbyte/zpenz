@@ -4,12 +4,15 @@ import io.github.morganbyte.zpenz.model.ledger.Account;
 import io.github.morganbyte.zpenz.model.ledger.AccountId;
 import io.github.morganbyte.zpenz.model.ledger.EntryAlreadyReversedException;
 import io.github.morganbyte.zpenz.model.ledger.EntryLine;
+import io.github.morganbyte.zpenz.model.ledger.IdempotencyKey;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntry;
 import io.github.morganbyte.zpenz.model.ledger.JournalEntryId;
 import io.github.morganbyte.zpenz.model.ledger.Side;
 import io.github.morganbyte.zpenz.model.ledger.SideTotals;
 import io.github.morganbyte.zpenz.model.ledger.gateways.AccountRepository;
+import io.github.morganbyte.zpenz.model.ledger.gateways.IdempotencyKeyRepository;
 import io.github.morganbyte.zpenz.model.ledger.gateways.JournalEntryRepository;
+import io.github.morganbyte.zpenz.model.ledger.gateways.Transactions;
 import io.github.morganbyte.zpenz.model.money.Money;
 
 import java.util.Collection;
@@ -17,13 +20,48 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-/** Implementación en memoria de los puertos, solo para probar los casos de uso. */
-class InMemoryLedger implements AccountRepository, JournalEntryRepository {
+/**
+ * Implementación en memoria de los puertos, solo para probar los casos de uso en un hilo. Una
+ * transacción que lanza una excepción deshace lo que agregó, como en la base.
+ */
+class InMemoryLedger implements AccountRepository, JournalEntryRepository, IdempotencyKeyRepository, Transactions {
 
     final Map<AccountId, Account> accounts = new LinkedHashMap<>();
     final Map<JournalEntryId, JournalEntry> entries = new LinkedHashMap<>();
+    final Map<IdempotencyKey, JournalEntryId> keys = new LinkedHashMap<>();
+    int transactionsStarted;
+
+    @Override
+    public <T> T inTransaction(Supplier<T> work) {
+        transactionsStarted++;
+        Map<AccountId, Account> accountsBefore = new LinkedHashMap<>(accounts);
+        Map<JournalEntryId, JournalEntry> entriesBefore = new LinkedHashMap<>(entries);
+        Map<IdempotencyKey, JournalEntryId> keysBefore = new LinkedHashMap<>(keys);
+        try {
+            return work.get();
+        } catch (RuntimeException e) {
+            accounts.clear();
+            accounts.putAll(accountsBefore);
+            entries.clear();
+            entries.putAll(entriesBefore);
+            keys.clear();
+            keys.putAll(keysBefore);
+            throw e;
+        }
+    }
+
+    @Override
+    public Optional<JournalEntryId> claim(IdempotencyKey key, JournalEntryId entryId) {
+        return Optional.ofNullable(keys.putIfAbsent(key, entryId));
+    }
+
+    @Override
+    public Optional<Account> lockById(AccountId id) {
+        return findById(id);
+    }
 
     @Override
     public void add(Account account) {

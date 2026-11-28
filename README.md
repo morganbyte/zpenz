@@ -72,7 +72,7 @@ El reporte de cobertura de JaCoCo queda en `build/reports/`. Las pruebas de pers
 curl localhost:8080/actuator/health    # {"status":"UP", ...}
 ```
 
-No hace falta instalar PostgreSQL. Los datos se pierden al detener la aplicación.
+No hace falta instalar PostgreSQL. Los datos se pierden al detener la aplicación. En local, el token de la API es el de [`src/test/resources/config/application.yaml`](applications/app-service/src/test/resources/config/application.yaml).
 
 ## Cómo correr con Docker
 
@@ -83,7 +83,8 @@ docker network create zpenz
 docker run -d --name db --network zpenz -e POSTGRES_DB=zpenz -e POSTGRES_USER=zpenz -e POSTGRES_PASSWORD=zpenz postgres:17-alpine
 docker build -f deployment/Dockerfile -t zpenz .
 docker run --rm --network zpenz -p 8080:8080 \
-  -e DB_URL=jdbc:postgresql://db:5432/zpenz -e DB_USERNAME=zpenz -e DB_PASSWORD=zpenz zpenz
+  -e DB_URL=jdbc:postgresql://db:5432/zpenz -e DB_USERNAME=zpenz -e DB_PASSWORD=zpenz \
+  -e API_TOKEN=$(openssl rand -hex 32) zpenz
 curl localhost:8080/actuator/health   # {"status":"UP", ...}
 ```
 
@@ -93,8 +94,36 @@ La imagen compila el proyecto por dentro, así que no hace falta correr `./gradl
 |---|---|
 | `DB_URL` | URL JDBC de PostgreSQL. Debe empezar por `jdbc:postgresql://`. |
 | `DB_USERNAME`, `DB_PASSWORD` | Credenciales de la base. |
+| `API_TOKEN` | Token de la API, de al menos 32 caracteres ([ADR-0008](docs/adr/0008-transferencias-atomicas-idempotentes-concurrentes.md)). Sin él la aplicación no arranca. Se reemplaza por JWT en la Fase 5. |
 | `PORT` | Puerto HTTP (por defecto 8080). |
 | `RENDER_GIT_COMMIT` | Commit que muestra `/actuator/info`. Render la define sola. |
+
+## Cómo usar la API
+
+Rutas provisionales de la Fase 3 ([ADR-0008](docs/adr/0008-transferencias-atomicas-idempotentes-concurrentes.md)); la Fase 4 fija el contrato con OpenAPI. Todas exigen `Authorization: Bearer $API_TOKEN` y responden los errores en formato *Problem Details*.
+
+```bash
+API=http://localhost:8080
+AUTH="Authorization: Bearer $API_TOKEN"
+
+# Cuentas: ASSET, LIABILITY, EQUITY, INCOME o EXPENSE.
+curl -s -H "$AUTH" -H 'Content-Type: application/json' $API/accounts \
+  -d '{"name":"Cuenta de ahorros","type":"ASSET"}'          # {"id":"<ahorros>", ...}
+
+# Transferencia: exige Idempotency-Key. Repetirla con la misma clave no la duplica.
+curl -s -H "$AUTH" -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" $API/transfers \
+  -d '{"from":"<origen>","to":"<destino>","amount":"70000.00","date":"2026-11-28","description":"Retiro"}'
+
+curl -s -H "$AUTH" $API/accounts/<ahorros>/balance        # {"accountId":"...","balance":"30000.00"}
+```
+
+| Respuesta | Cuándo |
+|---|---|
+| 201 | Transferencia registrada. Con `Idempotent-Replayed: true` si es la repetición de una ya registrada. |
+| 400 | Falta un dato, la clave o el monto tiene más de dos decimales. |
+| 401 | Falta el token o no es válido. |
+| 404 | Una de las cuentas no existe. |
+| 422 | Fondos insuficientes en una cuenta de activo, o la clave ya se usó para otra transferencia. |
 
 ## Despliegue
 
@@ -102,6 +131,7 @@ La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-des
 
 - **Nunca registres un método de pago en Render.** Sin tarjeta, al agotar los límites gratuitos Render suspende el servicio. Con tarjeta, cobra el excedente.
 - El servicio gratuito se duerme tras 15 minutos sin tráfico. La primera petición después de una pausa puede tardar entre 2 y 3 minutos.
+- `API_TOKEN` también se configura en el panel de Render. Genéralo con `openssl rand -hex 32` y guárdalo en tu gestor de contraseñas.
 - La base es PostgreSQL 17 en el plan gratuito de Neon. `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` se configuran en el panel de Render, nunca en el repositorio. `DB_URL` usa el endpoint **directo** de Neon (sin `-pooler` en el host) con `?sslmode=require`.
 - `/actuator/health` incluye la base: si Neon no responde, el servicio aparece caído.
 - `/actuator/info` muestra el commit desplegado, para verificar cada despliegue.
