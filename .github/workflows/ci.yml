@@ -49,8 +49,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: docker/setup-buildx-action@v4
+
+      # La caché de capas evita descargar Gradle y las dependencias en cada
+      # ejecución, lo que reduce los errores 429 (Too Many Requests) de Maven Central.
       - name: Construir imagen
-        run: docker build -f deployment/Dockerfile -t zpenz:ci .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deployment/Dockerfile
+          tags: zpenz:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Levantar el contenedor y esperar a /actuator/health
         run: |
