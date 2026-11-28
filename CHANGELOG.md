@@ -6,6 +6,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [0.2.0] - 2026-11-28
+
+Cierra la Fase 1: el motor contable de doble partida está en el dominio, en Java puro, con sus pruebas en el CI.
+
 ### Agregado
 
 - ADR-0006 (aceptado): modelo contable de doble partida con saldo calculado.
