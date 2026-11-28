@@ -75,6 +75,13 @@ curl localhost:8080/actuator/health   # {"status":"UP", ...}
 
 La imagen compila el proyecto por dentro, así que no hace falta correr `./gradlew build` antes. El puerto se puede cambiar con la variable `PORT`.
 
+## Despliegue
+
+La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-despliegue-gratuito-aws-al-final.md)). El servicio se define en [`render.yaml`](render.yaml) y se despliega solo cuando el CI de `main` pasa.
+
+- **Nunca registres un método de pago en Render.** Sin tarjeta, al agotar los límites gratuitos Render suspende el servicio. Con tarjeta, cobra el excedente.
+- El servicio gratuito se duerme tras 15 minutos sin tráfico. La primera petición después de una pausa puede tardar entre 2 y 3 minutos.
+
 ## Hoja de ruta
 
 **Regla de avance:** no se empieza una fase sin que la anterior esté **desplegada**, con **pruebas en verde** y este **README actualizado**. Si una fase se alarga, se corre el cronograma; la regla no se salta.

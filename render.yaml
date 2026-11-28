@@ -1,0 +1,17 @@
+# Blueprint de Render: define el servicio en el repositorio (ADR-0005).
+# Referencia: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: zpenz
+    runtime: docker
+    # Instancia gratuita: 512 MB, 0,1 CPU. Nunca registrar un método de pago en Render.
+    plan: free
+    # La región más cercana a Colombia. No se puede cambiar después de crear el servicio.
+    region: virginia
+    branch: main
+    dockerfilePath: ./deployment/Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    # Solo despliega cuando el CI de main pasa.
+    autoDeployTrigger: checksPass
+    numInstances: 1
