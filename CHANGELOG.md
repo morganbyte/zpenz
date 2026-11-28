@@ -8,7 +8,7 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ### Agregado
 
-- ADR-0007: persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base.
+- ADR-0007 (aceptado): persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base.
 - Persistencia en PostgreSQL (`ledger-store`): migración V1 con cuentas, asientos y líneas en `NUMERIC(19,2)`. La base rechaza asientos descuadrados (al final de la transacción), cambios y borrados de asientos, reversar dos veces un asiento o reversar un reverso.
 - Puertos del libro en el dominio y casos de uso: crear cuenta, registrar asiento, reversar asiento y consultar saldo.
 - `/actuator/info` muestra el commit desplegado (`RENDER_GIT_COMMIT`).

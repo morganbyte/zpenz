@@ -1,6 +1,6 @@
 # ADR-0007: Persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-28
 
 ## Contexto

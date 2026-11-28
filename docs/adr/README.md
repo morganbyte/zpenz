@@ -16,4 +16,4 @@ Reglas:
 | [0004](0004-dinero-bigdecimal-numeric.md) | Representar el dinero con `BigDecimal` y `NUMERIC(19,2)`, solo COP | Aceptado |
 | [0005](0005-despliegue-gratuito-aws-al-final.md) | Desplegar en planes gratuitos permanentes y dejar AWS para una demostración final | Aceptado |
 | [0006](0006-modelo-contable-doble-partida.md) | Modelo contable de doble partida con saldo calculado | Aceptado |
-| [0007](0007-persistencia-jdbcclient-flyway.md) | Persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base | Propuesto |
+| [0007](0007-persistencia-jdbcclient-flyway.md) | Persistir el libro con SQL explícito (`JdbcClient`) y Flyway, con las reglas también en la base | Aceptado |
