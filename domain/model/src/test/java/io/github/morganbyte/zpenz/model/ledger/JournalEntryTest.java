@@ -140,4 +140,36 @@ class JournalEntryTest {
 
         assertThat(entry).isEqualTo(sameId).hasSameHashCodeAs(sameId);
     }
+
+    @Test
+    void rejectsDescriptionsLongerThanTheLimit() {
+        List<EntryLine> lines = List.of(debit(groceries, Money.of("1")), credit(savings, Money.of("1")));
+        String longest = "a".repeat(JournalEntry.DESCRIPTION_MAX_LENGTH);
+
+        assertThat(JournalEntry.post(JournalEntryId.random(), DATE, longest, lines).description()).hasSize(255);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> JournalEntry.post(JournalEntryId.random(), DATE, longest + "a", lines))
+                .withMessageContaining("255 caracteres");
+    }
+
+    @Test
+    void restoresARegisteredReversal() {
+        JournalEntry original = groceriesPaidWithSavings();
+        JournalEntry reversal = original.reverse(JournalEntryId.random(), DATE, "Reverso");
+
+        JournalEntry restored = JournalEntry.restore(reversal.id(), reversal.date(), reversal.description(),
+                reversal.lines(), original.id());
+
+        assertThat(restored.reversalOf()).contains(original.id());
+        assertThat(restored.lines()).isEqualTo(reversal.lines());
+        assertThat(JournalEntry.restore(original.id(), DATE, "Mercado", original.lines(), null).isReversal()).isFalse();
+    }
+
+    @Test
+    void cannotRestoreAnUnbalancedEntry() {
+        List<EntryLine> unbalanced = List.of(debit(groceries, Money.of("2")), credit(savings, Money.of("1")));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> JournalEntry.restore(JournalEntryId.random(), DATE, "Roto", unbalanced, null));
+    }
 }

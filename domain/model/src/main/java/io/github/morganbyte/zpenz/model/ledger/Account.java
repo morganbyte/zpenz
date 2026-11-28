@@ -9,6 +9,8 @@ import java.util.Objects;
  */
 public record Account(AccountId id, String name, AccountType type) {
 
+    public static final int NAME_MAX_LENGTH = 100;
+
     public Account {
         Objects.requireNonNull(id, "El identificador de la cuenta es obligatorio");
         Objects.requireNonNull(name, "El nombre de la cuenta es obligatorio");
@@ -17,24 +19,41 @@ public record Account(AccountId id, String name, AccountType type) {
         if (name.isEmpty()) {
             throw new IllegalArgumentException("El nombre de la cuenta no puede estar vacío");
         }
+        if (name.length() > NAME_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                    "El nombre de la cuenta no puede pasar de " + NAME_MAX_LENGTH + " caracteres");
+        }
     }
 
     /**
-     * Saldo de la cuenta según los asientos dados: las líneas del lado normal suman y las
-     * del lado contrario restan. Las líneas de otras cuentas se ignoran.
+     * Saldo de la cuenta según los asientos dados. Las líneas de otras cuentas se ignoran.
      */
     public Money balance(Iterable<JournalEntry> entries) {
         Objects.requireNonNull(entries, "Los asientos son obligatorios");
-        Money balance = Money.ZERO;
+        Money debits = Money.ZERO;
+        Money credits = Money.ZERO;
         for (JournalEntry entry : entries) {
             for (EntryLine line : entry.lines()) {
                 if (line.accountId().equals(id)) {
-                    balance = line.side() == type.normalSide()
-                            ? balance.plus(line.amount())
-                            : balance.minus(line.amount());
+                    if (line.side() == Side.DEBIT) {
+                        debits = debits.plus(line.amount());
+                    } else {
+                        credits = credits.plus(line.amount());
+                    }
                 }
             }
         }
-        return balance;
+        return balance(new SideTotals(debits, credits));
+    }
+
+    /**
+     * Saldo de la cuenta a partir de la suma de sus débitos y créditos: el lado normal suma
+     * y el contrario resta. Es la única regla de signos del sistema (ADR-0006 y ADR-0007).
+     */
+    public Money balance(SideTotals totals) {
+        Objects.requireNonNull(totals, "Los totales son obligatorios");
+        return type.normalSide() == Side.DEBIT
+                ? totals.debits().minus(totals.credits())
+                : totals.credits().minus(totals.debits());
     }
 }
