@@ -4,7 +4,7 @@ Plataforma de finanzas personales construida por dentro como un **core bancario*
 
 No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el saldo se **calcula a partir de asientos contables de doble partida**, nada se borra (se reversa) y dos operaciones simultáneas no se pisan.
 
-> **Estado:** Fase 0 terminada (v0.1.0): el esqueleto está desplegado en https://zpenz.onrender.com/actuator/health. En curso: Fase 1, motor contable. Todavía no hay funcionalidad expuesta por la API.
+> **Estado:** Fase 1 terminada (v0.2.0): el motor contable de doble partida está en el dominio y desplegado en https://zpenz.onrender.com/actuator/health. Siguiente: Fase 2, persistencia con Flyway. Todavía no hay funcionalidad expuesta por la API.
 
 ## Principios
 
@@ -89,8 +89,8 @@ La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-des
 | Fase | Contenido | Hecho cuando | Estado |
 |---|---|---|---|
 | 0 | Esqueleto: scaffold, Docker, CI, despliegue en Render | `/actuator/health` responde en una URL pública | ✅ Hecho |
-| 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | 🚧 Siguiente |
-| 2 | Persistencia con Flyway | Migraciones aplicadas en Neon | ⏳ |
+| 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | ✅ Hecho |
+| 2 | Persistencia con Flyway | Migraciones aplicadas en Neon | 🚧 Siguiente |
 | 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | ⏳ |
 | 4 | API REST + OpenAPI | Swagger accesible | ⏳ |
 | 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | ⏳ |
