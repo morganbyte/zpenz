@@ -1,6 +1,6 @@
 # ADR-0006: Modelo contable de doble partida con saldo calculado
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado
 - **Fecha:** 2026-11-28
 
 ## Contexto
