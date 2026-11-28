@@ -4,7 +4,7 @@ Plataforma de finanzas personales construida por dentro como un **core bancario*
 
 No es otra app de gastos. Aquí no existe un campo `saldo` que se edita: el saldo se **calcula a partir de asientos contables de doble partida**, nada se borra (se reversa) y dos operaciones simultáneas no se pisan.
 
-> **Estado:** Fase 3 terminada (v0.4.0): transferencias atómicas, idempotentes y seguras ante concurrencia, desplegadas en https://zpenz.onrender.com detrás de un token temporal. Siguiente: Fase 4, API REST con OpenAPI.
+> **Estado:** Fase 4 terminada (v0.5.0): API REST v1 documentada con OpenAPI, con Swagger UI público en https://zpenz.onrender.com/swagger-ui.html. La API exige un token temporal. Siguiente: Fase 5, registro e inicio de sesión con JWT.
 
 ## Principios
 
@@ -152,8 +152,8 @@ La aplicación corre en el plan gratuito de Render ([ADR-0005](docs/adr/0005-des
 | 1 | Motor contable en Java puro | Pruebas del dominio en CI, versión desplegada | ✅ Hecho |
 | 2 | Persistencia con Flyway | Migraciones aplicadas en Neon | ✅ Hecho |
 | 3 | Transferencias atómicas, idempotentes y concurrentes | Endpoint funcionando en la nube | ✅ Hecho |
-| 4 | API REST + OpenAPI | Swagger accesible | 🚧 Siguiente |
-| 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | ⏳ |
+| 4 | API REST + OpenAPI | Swagger accesible | ✅ Hecho |
+| 5 | Registro e inicio de sesión con JWT | Cualquier persona puede crear cuenta | 🚧 Siguiente |
 | 6 | Eventos con outbox + RabbitMQ | Broker en la nube | ⏳ |
 | 7 | SonarCloud y cobertura | Quality gate en verde | ⏳ |
 | 8 | Observabilidad | Panel de Grafana con métricas reales | ⏳ |

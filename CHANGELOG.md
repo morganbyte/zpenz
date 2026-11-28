@@ -6,6 +6,10 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [0.5.0] - 2026-11-28
+
+Cierra la Fase 4: la API REST v1 está documentada con OpenAPI, con Swagger UI público y el contrato guardado en el repositorio. Verificado en producción.
+
 ### Agregado
 
 - ADR-0009 (aceptado): API REST `v1` documentada con springdoc desde el código, con el contrato guardado en el repositorio.
