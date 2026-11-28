@@ -38,6 +38,11 @@ class HealthEndpointTest {
         assertEquals(200, get("/actuator/health/readiness").statusCode());
     }
 
+    @Test
+    void metricsEndpointIsNotPublic() throws IOException, InterruptedException {
+        assertEquals(404, get("/actuator/prometheus").statusCode());
+    }
+
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());

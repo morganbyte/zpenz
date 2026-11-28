@@ -12,7 +12,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: "health,prometheus"
+        # Solo health es público. Las métricas (prometheus) se vuelven a exponer,
+        # con protección, en la Fase 8 (observabilidad).
+        include: "health"
   endpoint:
     health:
       probes:
